@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup event
     print("Starting up...")
@@ -22,3 +24,9 @@ async def health_check() -> Entry:
     """
     return Entry(id=1, name="Health Check", description="API is healthy")
 
+@app.post("/items/", response_model=Entry, tags=["Items"])
+async def create_item(item: Entry) -> Entry:
+    """
+    Create a new item.
+    """
+    return item
