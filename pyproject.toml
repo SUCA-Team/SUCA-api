@@ -1,0 +1,49 @@
+[project]
+name = "suca-api"
+version = "0.1.0"
+description = "SUCA API"
+authors = [
+    {name = "SUCA Team"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi (>=0.118.0,<0.119.0)",
+    "uvicorn[standard] (>=0.37.0,<0.38.0)",
+    "sqlmodel (>=0.0.25,<0.0.26)",
+    "alembic (>=1.16.5,<2.0.0)",
+    "pydantic (>=2.11.10,<3.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.13.3,<0.14.0)",
+    "pytest (>=8.4.2,<9.0.0)",
+    "pytest-asyncio (>=1.2.0,<2.0.0)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "mypy (>=1.18.2,<2.0.0)"
+]
+
+[tool.ruff]
+line-length = 100
+select = ["E","F","I","B","UP"]
+ignore = ["E501"]
+exclude = ["alembic"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = true
+pretty = true
