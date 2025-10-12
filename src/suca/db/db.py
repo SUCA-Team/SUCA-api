@@ -13,4 +13,5 @@ async def connect_db(app):
     app.state.db = db
 
 async def close_db(app):
-    await db.close()
+    if db is not None:
+        await db.close()

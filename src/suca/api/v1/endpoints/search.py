@@ -4,9 +4,11 @@ import requests
 router = APIRouter(prefix="/search", tags=["Search"])
 
 @router.get("")
-async def search_word(request: Request, q: str | None = None):
+async def search_word(request: Request, q: str | None = None) -> dict:
     if q is None:
-        return {"Please enter a word!"}
+        return {
+            "notification": "Please enter a word!"
+        }
 
     ip = q
     rows = await request.app.state.db.fetch("""
@@ -35,7 +37,9 @@ async def search_word(request: Request, q: str | None = None):
     """, ip)
 
     if not rows:
-        return {"Please enter a word!"}
+        return {
+            "notification": "Please enter a word!"
+        }
 
     kanji_list = rows[0]["kanji"].split(", ") if rows[0]["kanji"] else []
     reading_list = rows[0]["readings"].split(", ") if rows[0]["readings"] else []

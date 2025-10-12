@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+# from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from .db.db import connect_db, close_db
 from .api.v1.router import app as api_router

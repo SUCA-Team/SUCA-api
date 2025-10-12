@@ -5,9 +5,11 @@ router = APIRouter(prefix="/translate", tags=["Translate"])
 trans = pylingva()
 
 @router.get("/en2jp")
-async def translate_text(request: Request, q: str | None = None, target_lang: str = "ja"):
+async def translate_en2jp(request: Request, q: str | None = None, target_lang: str = "ja") -> dict:
     if q is None:
-        return {"Please enter text!"}
+        return {
+            "notification": "Please enter text!"
+        }
     
     ip = q
     return {
@@ -16,9 +18,11 @@ async def translate_text(request: Request, q: str | None = None, target_lang: st
     }
 
 @router.get("/jp2en")
-async def translate_text(request: Request, q: str | None = None, target_lang: str = "en"):
+async def translate_jp2en(request: Request, q: str | None = None, target_lang: str = "en") -> dict:
     if q is None:
-        return {"Please enter text!"}
+        return {
+            "notification": "Please enter text!"
+        }
     
     ip = q
     return {
