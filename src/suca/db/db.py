@@ -1,12 +1,19 @@
 import os
-import asyncpg
+from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session
 
-DB_USER = os.getenv("DB_USER", "ciferia")
-DB_PASS = os.getenv("DB_PASS", "shop24h1180")
+# Load biến môi trường từ file .env
+load_dotenv()
+
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "jmdict")
+DB_NAME = os.getenv("DB_NAME")
+
+# Kiểm tra biến bắt buộc
+if not DB_USER or not DB_NAME:
+    raise ValueError("DB_USER and DB_NAME must be set in .env file")
 
 # connection string for psycopg2
 if DB_PASS:
@@ -20,5 +27,6 @@ def init_db():
     SQLModel.metadata.create_all(engine)
 
 def get_session():
+    """FastAPI dependency: yield a Session and ensure it is closed."""
     with Session(engine) as session:
         yield session
