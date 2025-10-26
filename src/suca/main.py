@@ -1,29 +1,22 @@
 from fastapi import FastAPI
 # from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from .db.db import connect_db, close_db
+from .db.db import init_db
 from .api.v1.router import app as api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup event
     print("Starting up...")
-    await connect_db(app)
-    yield
-    # Shutdown event
-    print("Shutting down...")
-    await close_db(app)
+    init_db()
+    try:
+        yield
+    finally:
+        print("Shutting down...")
 
 app = FastAPI(title="SUCA API", lifespan=lifespan)
 
-
 app.include_router(api_router)
-
-# class Entry(BaseModel):
-#     id: int
-#     name: str
-#     description: str | None = None
-
 
 
 # @app.get("/health", tags=["Health"])

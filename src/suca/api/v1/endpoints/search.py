@@ -1,84 +1,88 @@
-from fastapi import APIRouter, Request
-import requests
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Any
+from sqlmodel import Session, select
+from suca.db.db import get_session
+from suca.db.model import Entry, Kanji, Reading
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
-@router.get("")
-async def search_word(request: Request, q: str | None = None) -> dict:
-    if q is None:
-        return {
-            "notification": "Please enter a word!"
+def _to_jisho(entry: Entry) -> dict:
+    # --- primary kanji & reading ---
+    primary_kanji = entry.kanjis[0].keb if entry.kanjis else None
+    primary_reading = entry.readings[0].reb if entry.readings else None
+
+    # --- other forms ---
+    other_forms = []
+    for r in entry.readings:
+        if r.reb != primary_reading:
+            other_forms.append(r.reb)
+    for k in entry.kanjis:
+        if k.keb != primary_kanji:
+            other_forms.append(k.keb)
+
+    # --- variants ---
+    variants = []
+    for k in entry.kanjis:
+        for r in entry.readings:
+            variants.append({"kanji": k.keb, "reading": r.reb})
+
+    # --- meanings ---
+    meanings = []
+    for s in entry.senses:
+        defs = [g.text for g in s.glosses if g.lang == "eng"]
+        pos_list = s.pos.split("; ") if s.pos else []
+
+        # examples: JSON {"japanese": ..., "english": ...}
+        examples = []
+        for ex in s.examples:
+            try:
+                ex_obj = json.loads(ex.text)
+                examples.append(ex_obj)
+            except Exception:
+                pass
+
+        meaning_obj = {
+            "pos": pos_list,
+            "definitions": defs,
+            "examples": examples,
+            "notes": []
         }
+        meanings.append(meaning_obj)
 
-    ip = q
-    rows = await request.app.state.db.fetch("""
-        WITH word_data AS (
-            SELECT 
-                e.ent_seq,
-                (SELECT string_agg(keb, ', ') FROM kanji WHERE entry_id = e.ent_seq) AS kanji,
-                (SELECT string_agg(reb, ', ') FROM readings WHERE entry_id = e.ent_seq) AS readings
-            FROM entries e
-            WHERE EXISTS (
-                SELECT 1 FROM kanji WHERE entry_id = e.ent_seq AND keb = $1
-            ) OR EXISTS (
-                SELECT 1 FROM readings WHERE entry_id = e.ent_seq AND reb = $1
-            )
-        )
-        SELECT 
-            w.ent_seq,
-            w.kanji,
-            w.readings,
-            s.sense_order,
-            s.gloss,
-            s.pos
-        FROM word_data w
-        JOIN senses s ON w.ent_seq = s.entry_id
-        ORDER BY s.sense_order;
-    """, ip)
-
-    if not rows:
-        return {
-            "notification": "Please enter a word!"
-        }
-
-    kanji_list = rows[0]["kanji"].split(", ") if rows[0]["kanji"] else []
-    reading_list = rows[0]["readings"].split(", ") if rows[0]["readings"] else []
-
-    meanings = {}
-    for row in rows:
-        pos_text = row["pos"] if row["pos"] else "Other"
-        gloss = row["gloss"]
-
-        if pos_text not in meanings:
-            meanings[pos_text] = []
-
-        if gloss not in meanings[pos_text]:
-            meanings[pos_text].append(gloss)
-
-    meanings_list = []
-    for pos, defs in meanings.items():
-        numbered_defs = [f"{i+1}. {d}" for i, d in enumerate(defs)]
-        meanings_list.append({"pos": pos, "definitions": numbered_defs})
-
-    url = "https://tatoeba.org/en/api_v0/search?query=" + ip + "&from=jpn&to=eng"
-    req = requests.get(url).json()
-    results = req.get("results", [])
-
-    examples = []
-    for item in results[:5]:
-        jp = item.get('text', '')
-        translations = item.get('translations', [])
-        if translations and translations[0]:
-            en_raw = translations[0][0].get('text', '')
-            en = en_raw.replace('\\"', '"')
-        else:
-            en = ""
-        examples.append({"jp": jp, "en": en})
-
-    return {
-        "word": ip,
-        "kanji": kanji_list,
-        "reading": reading_list,
-        "meanings": meanings_list,
-        "examples": examples
+    out = {
+        "word": primary_kanji or primary_reading,
+        "reading": primary_reading,
+        "is_common": bool(entry.is_common),
+        "jlpt_level": entry.jlpt_level,
+        "meanings": meanings,
+        "other_forms": other_forms,
+        "tags": ["common word"] if entry.is_common else [],
+        "variants": variants
     }
+    return out
+
+
+@router.get("")
+def search(q: str, session: Session = Depends(get_session)) -> Any:
+    if not q:
+        raise HTTPException(status_code=400, detail="q (query) is required")
+
+    # exact match in kanji or readings
+    stmt = select(Entry).where(
+        Entry.ent_seq.in_(select(Kanji.entry_id).where(Kanji.keb == q))
+        | Entry.ent_seq.in_(select(Reading.entry_id).where(Reading.reb == q))
+    )
+    result = session.exec(stmt).first()
+
+    if not result:
+        # partial match: kanji contains or reading contains
+        stmt2 = select(Entry).where(
+            Entry.ent_seq.in_(select(Kanji.entry_id).where(Kanji.keb.like(f"%{q}%")))
+            | Entry.ent_seq.in_(select(Reading.entry_id).where(Reading.reb.like(f"%{q}%")))
+        )
+        result = session.exec(stmt2).first()
+        if not result:
+            raise HTTPException(status_code=404, detail="Word not found")
+
+    return _to_jisho(result)
