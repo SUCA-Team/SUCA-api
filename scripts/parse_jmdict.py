@@ -7,11 +7,12 @@ Only English glosses are imported.
 import json
 from lxml import etree
 from sqlmodel import Session
-from database import init_db, engine, get_session
-from models import Entry, Kanji, Reading, Sense, Gloss, Example
+from db import init_db, engine, get_session
+from model import Entry, Kanji, Reading, Sense, Gloss, Example
+
 
 # === CONFIG ===
-JMDFILE = r"D:\JMdict\JMdict"  # Path to your JMdict file
+JMDFILE = r"jm.db"  # Path to your JMdict file
 BATCH_SIZE = 500
 LIMIT_ENTRIES = 100  # For testing only — set None for full parse
 
@@ -146,7 +147,6 @@ def parse():
                             elif lang == "eng":
                                 eng_sentence = ex_sent.text.strip() if ex_sent.text else None
                         if jp_sentence or eng_sentence:
-                            # lưu dưới dạng JSON string trong cột examples của Sense
                             sense_obj.examples.append(
                                 Example(text=json.dumps({"japanese": jp_sentence, "english": eng_sentence}))
                             )

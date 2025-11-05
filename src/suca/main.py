@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 # from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from .db.db import init_db
@@ -15,6 +16,15 @@ async def lifespan(app: FastAPI):
         print("Shutting down...")
 
 app = FastAPI(title="SUCA API", lifespan=lifespan)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://akichiro.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(api_router)
 
