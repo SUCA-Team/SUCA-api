@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Any
 from sqlmodel import Session, select, col, SQLModel
 from sqlalchemy import or_
-from src.suca.db.db import get_session
+from src.suca.api.deps import get_session
 from src.suca.db.model import Entry, Kanji, Reading
 
 # Response models

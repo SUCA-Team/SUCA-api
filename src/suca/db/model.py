@@ -36,7 +36,7 @@ class Sense(SQLModel, table=True):
 
     entry: "Entry" = Relationship(back_populates="senses")
     glosses: List["Gloss"] = Relationship(back_populates="sense")
-    examples: List["Example"] = Relationship(back_populates="sense")  # 👈 thêm dòng này
+    examples: List["Example"] = Relationship(back_populates="sense")
 
 class Gloss(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -45,7 +45,7 @@ class Gloss(SQLModel, table=True):
     text: str
     sense: "Sense" = Relationship(back_populates="glosses")
 
-class Example(SQLModel, table=True):  # 👈 bảng mới
+class Example(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     sense_id: int = Field(foreign_key="sense.id")
     text: str
