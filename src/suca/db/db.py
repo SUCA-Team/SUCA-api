@@ -1,25 +1,36 @@
-import os
-from dotenv import load_dotenv
+"""Database configuration and initialization."""
+
 from sqlmodel import SQLModel, create_engine
 
-load_dotenv()
+from ..core.config import settings
+from ..utils.logging import logger
 
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
-DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME")
 
-if not DB_USER or not DB_NAME:
-    raise ValueError("DB_USER and DB_NAME must be set in .env file")
+def create_database_engine():
+    """Create database engine based on configuration."""
+    try:
+        engine = create_engine(
+            settings.database_url,
+            echo=settings.debug,
+            pool_pre_ping=True
+        )
+        logger.info(f"Database engine created for: {settings.database_url}")
+        return engine
+    except Exception as e:
+        logger.error(f"Failed to create database engine: {e}")
+        raise
 
-if DB_PASS:
-    DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-else:
-    DATABASE_URL = f"postgresql+psycopg2://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+# Global engine instance
+engine = create_database_engine()
+
 
 def init_db():
-    SQLModel.metadata.create_all(engine)
+    """Initialize database tables."""
+    try:
+        SQLModel.metadata.create_all(engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        raise
 

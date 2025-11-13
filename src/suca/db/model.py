@@ -1,5 +1,9 @@
+"""Database models for the SUCA dictionary."""
+
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
+from .base import BaseTable
+
 
 class Entry(SQLModel, table=True):
     ent_seq: int = Field(primary_key=True)
