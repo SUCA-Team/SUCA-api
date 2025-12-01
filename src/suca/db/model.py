@@ -1,10 +1,9 @@
-"""Database models for the SUCA dictionary."""
-
 from sqlmodel import SQLModel, Field, Relationship
 from typing import Optional, List
+from datetime import datetime, timezone
 from .base import BaseTable
 
-
+# Database models for the SUCA dictionary
 class Entry(SQLModel, table=True):
     ent_seq: int = Field(primary_key=True)
     is_common: bool
@@ -54,3 +53,32 @@ class Example(SQLModel, table=True):
     sense_id: int = Field(foreign_key="sense.id")
     text: str
     sense: "Sense" = Relationship(back_populates="examples")
+
+# Database models for the SUCA flashcard
+class FlashcardDeck(SQLModel, table=True):
+    """Flashcard deck model."""
+    __tablename__ = "flashcard_decks"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(index=True)
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    flashcards: List["Flashcard"] = Relationship(back_populates="deck")
+
+class Flashcard(SQLModel, table=True):
+    """Flashcard model."""
+    __tablename__ = "flashcards"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    deck_id: int = Field(foreign_key="flashcard_decks.id", index=True)
+    user_id: str = Field(index=True)
+    front: str
+    back: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    deck: Optional[FlashcardDeck] = Relationship(back_populates="flashcards")

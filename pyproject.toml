@@ -47,7 +47,8 @@ exclude = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+pythonpath = ["."]
+addopts = "-v --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.13"

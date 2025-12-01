@@ -33,4 +33,3 @@ def init_db():
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise
-
