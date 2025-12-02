@@ -1,29 +1,46 @@
 """Database configuration and initialization."""
 
+from typing import Optional
 from sqlmodel import SQLModel, create_engine
+from sqlalchemy.engine import Engine
 
 from ..core.config import settings
 from ..utils.logging import logger
 
+# Global engine instance (lazy initialization)
+_engine: Optional[Engine] = None
 
-def create_database_engine():
+
+def get_engine() -> Engine:
+    """Get or create database engine (singleton pattern)."""
+    global _engine
+    if _engine is None:
+        _engine = create_database_engine()
+    return _engine
+
+
+def create_database_engine(database_url: Optional[str] = None) -> Engine:
     """Create database engine based on configuration."""
+    url = database_url or settings.database_url
     try:
-        engine = create_engine(settings.database_url, echo=settings.debug, pool_pre_ping=True)
-        logger.info(f"Database engine created for: {settings.database_url}")
+        engine = create_engine(url, echo=settings.debug, pool_pre_ping=True)
+        logger.info(f"Database engine created for: {url}")
         return engine
     except Exception as e:
         logger.error(f"Failed to create database engine: {e}")
         raise
 
 
-# Global engine instance
-engine = create_database_engine()
+def set_engine(engine: Engine) -> None:
+    """Set custom engine (used in testing)."""
+    global _engine
+    _engine = engine
 
 
-def init_db():
+def init_db() -> None:
     """Initialize database tables."""
     try:
+        engine = get_engine()
         SQLModel.metadata.create_all(engine)
         logger.info("Database tables created successfully")
     except Exception as e:
