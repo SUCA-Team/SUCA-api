@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from src.suca.core.exceptions import SearchException
 from src.suca.schemas.search import SearchRequest
 from src.suca.services.search_service import SearchService
 
@@ -26,7 +27,7 @@ def test_search_service_empty_query(session: Session):
     """Test search service with empty query."""
     service = SearchService(session)
 
-    with pytest.raises(Exception):  # Should raise SearchException
+    with pytest.raises(SearchException):
         service.search_entries(SearchRequest(query=""))
 
 

@@ -100,7 +100,7 @@ class SearchService(BaseService[Entry]):
             kanji_stmt = (
                 select(Entry)
                 .join(Kanji)
-                .where(base_kanji_filter & (Entry.is_common == True))
+                .where(base_kanji_filter & Entry.is_common)
                 .limit(5)
             )
             results.extend(self.session.exec(kanji_stmt).all())
@@ -108,7 +108,7 @@ class SearchService(BaseService[Entry]):
             reading_stmt = (
                 select(Entry)
                 .join(Reading)
-                .where(base_reading_filter & (Entry.is_common == True))
+                .where(base_reading_filter & Entry.is_common)
                 .limit(5)
             )
             results.extend(self.session.exec(reading_stmt).all())
@@ -134,7 +134,7 @@ class SearchService(BaseService[Entry]):
                 .where(
                     col(Kanji.keb).like(f"%{query}%")
                     & (~col(Kanji.keb).like(f"{query}%"))
-                    & (Entry.is_common == True)
+                    & Entry.is_common
                 )
                 .limit(10)
             )
@@ -153,7 +153,7 @@ class SearchService(BaseService[Entry]):
             .where(
                 col(Kanji.keb).like(f"%{query}%")
                 & (Kanji.keb != query)
-                & (~col(Kanji.keb).like(f"{query}%") | (Entry.is_common != True))
+                & (~col(Kanji.keb).like(f"{query}%") | ~Entry.is_common)
             )
             .limit(15)
         )
@@ -166,7 +166,7 @@ class SearchService(BaseService[Entry]):
             .where(
                 col(Reading.reb).like(f"%{query}%")
                 & (Reading.reb != query)
-                & (~col(Reading.reb).like(f"{query}%") | (Entry.is_common != True))
+                & (~col(Reading.reb).like(f"{query}%") | ~Entry.is_common)
             )
             .limit(15)
         )

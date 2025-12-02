@@ -343,9 +343,9 @@ def test_delete_deck_with_flashcards(auth_client: TestClient):  # ← Changed
         f"/api/v1/flashcard/decks/{deck_id}/cards", json={"front": "Card 1", "back": "Card 1"}
     ).json()
 
-    card2 = auth_client.post(
+    auth_client.post(
         f"/api/v1/flashcard/decks/{deck_id}/cards", json={"front": "Card 2", "back": "Card 2"}
-    ).json()
+    )
 
     # Delete the deck
     delete_response = auth_client.delete(f"/api/v1/flashcard/decks/{deck_id}")

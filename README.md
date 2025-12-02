@@ -6,6 +6,7 @@ A modern Japanese dictionary API with flashcard management, built with FastAPI. 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.118-009688.svg)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![CI](https://github.com/yourusername/SUCA-api/workflows/CI/badge.svg)](https://github.com/yourusername/SUCA-api/actions)
 
 ---
 
@@ -41,6 +42,7 @@ A modern Japanese dictionary API with flashcard management, built with FastAPI. 
 - [Testing](#-testing)
 - [Database Operations](#️-database-operations)
 - [Development](#-development)
+- [CI/CD](#-cicd)
 - [Deployment](#-deployment)
 - [Architecture](#️-architecture)
 - [Contributing](#-contributing)
@@ -722,6 +724,128 @@ poetry add --group dev package-name
 # Check for security issues
 poetry run pip-audit
 ```
+
+---
+
+## 🔄 CI/CD
+
+### GitHub Actions Workflows
+
+The project uses GitHub Actions for continuous integration and automated releases.
+
+#### CI Pipeline (`ci.yml`)
+
+Runs on every push and pull request to `main` or `develop` branches.
+
+**Jobs:**
+1. **Lint** - Code style checking with ruff
+2. **Type Check** - Type safety validation with mypy
+3. **Test** - Unit and integration tests with PostgreSQL
+4. **Security** - Security scanning with Bandit
+5. **Build** - Poetry package build validation
+6. **Docker** - Docker image build and test
+7. **Summary** - Overall CI status
+
+**Features:**
+- ✅ Dependency caching for faster builds
+- ✅ Code coverage reporting
+- ✅ Parallel job execution
+- ✅ Artifact uploads for test results
+- ✅ PostgreSQL service container for tests
+
+**Trigger CI:**
+```bash
+# Push to main/develop
+git push origin main
+
+# Create pull request
+git push origin feature/my-feature
+# Then create PR on GitHub
+```
+
+#### Release Workflow (`release.yml`)
+
+Automatically creates releases when you push version tags.
+
+**Triggered by:**
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+**Actions:**
+- 📦 Builds Poetry package
+- 🚀 Creates GitHub Release with artifacts
+- 🐳 Publishes Docker image to Docker Hub
+- 📝 Generates release notes
+
+**Docker Image:**
+```bash
+# Pull the latest release
+docker pull yourusername/suca-api:latest
+
+# Pull specific version
+docker pull yourusername/suca-api:v1.0.0
+```
+
+#### CodeQL Security Analysis (`codeql.yml`)
+
+Runs advanced security scanning weekly and on every push.
+
+**Features:**
+- 🛡️ Detects security vulnerabilities
+- 🔍 Identifies code quality issues
+- 📊 Security reports in GitHub Security tab
+- ⏰ Weekly scheduled scans
+
+#### Dependency Updates (`dependency-update.yml`)
+
+Automatically checks for dependency updates weekly.
+
+**Features:**
+- 📅 Runs every Monday at 9 AM UTC
+- 🔄 Creates PR with updated dependencies
+- 📝 Detailed changelog in PR description
+- 🏷️ Auto-labeled with `dependencies`
+
+### CI/CD Best Practices
+
+**Before Pushing:**
+```bash
+# Run local CI checks
+make ci-checks
+
+# Ensure all tests pass
+make test-cov
+
+# Fix any linting issues
+make lint-fix
+```
+
+**Release Process:**
+1. Update version in `pyproject.toml`
+2. Commit changes: `git commit -m "chore: bump version to 1.0.0"`
+3. Create tag: `git tag v1.0.0`
+4. Push tag: `git push origin v1.0.0`
+5. GitHub Actions will:
+   - Run full CI pipeline
+   - Build package
+   - Create GitHub release
+   - Publish Docker image
+
+**Monitoring CI:**
+- View workflow runs: [GitHub Actions](https://github.com/yourusername/SUCA-api/actions)
+- Security alerts: [GitHub Security](https://github.com/yourusername/SUCA-api/security)
+
+### Required Secrets
+
+Configure these in GitHub Settings → Secrets:
+
+| Secret | Description | Required For |
+|--------|-------------|--------------|
+| `CODECOV_TOKEN` | Codecov upload token | Code coverage |
+| `DOCKER_HUB_USERNAME` | Docker Hub username | Docker publishing |
+| `DOCKER_HUB_TOKEN` | Docker Hub access token | Docker publishing |
 
 ---
 

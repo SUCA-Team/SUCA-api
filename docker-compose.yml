@@ -1,0 +1,90 @@
+# Docker Compose configuration for SUCA API
+# This file defines all services needed to run the application
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:16-alpine
+    container_name: suca-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-cynmeiciel}
+      POSTGRES_PASSWORD: ${DB_PASS:-tvduyeplmr}
+      POSTGRES_DB: ${DB_NAME:-jmdict}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Optional: Add initialization scripts
+      # - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - suca-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cynmeiciel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SUCA API Application Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: suca-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Database connection
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-cynmeiciel}
+      DB_PASS: ${DB_PASS:-tvduyeplmr}
+      DB_NAME: ${DB_NAME:-jmdict}
+      
+      # API settings
+      ENV: ${ENV:-dev}
+      DEBUG: ${DEBUG:-false}
+      
+      # CORS settings
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://akichiro.github.io
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - suca-network
+    volumes:
+      # Mount code for development (comment out for production)
+      - ./src:/app/src
+      # Mount logs directory
+      - ./logs:/app/logs
+
+  # Optional: PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: suca-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@suca.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    networks:
+      - suca-network
+    depends_on:
+      - db
+    profiles:
+      # Only start with: docker-compose --profile tools up
+      - tools
+
+networks:
+  suca-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

@@ -47,9 +47,15 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-select = ["E","F","I","B","UP"]
-ignore = ["E501"]
 exclude = ["alembic"]
+
+[tool.ruff.lint]
+select = ["E","F","I","B","UP"]
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Function call in argument defaults (FastAPI Depends pattern)
+    "B904"    # Exception chaining (not always needed for simple re-raises)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
