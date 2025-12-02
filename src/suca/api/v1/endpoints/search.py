@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from ....api.deps import SearchServiceDep
 from ....core.exceptions import HTTPExceptions, SearchException
 from ....schemas.search import SearchRequest, SearchResponse
+from ....utils.logging import logger
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -32,5 +33,6 @@ def search(
 
     except SearchException as e:
         raise HTTPExceptions.bad_request(detail=e.message)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Search error: {str(e)}", exc_info=True)
         raise HTTPExceptions.internal_server_error(detail="Search failed")

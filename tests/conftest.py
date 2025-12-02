@@ -7,21 +7,31 @@ from sqlmodel.pool import StaticPool
 
 from src.suca.api.deps import get_session
 from src.suca.core.auth import create_access_token
+from src.suca.db.db import set_engine
 from src.suca.main import app
 
 
-@pytest.fixture(name="session")
+@pytest.fixture(name="session", scope="function")
 def session_fixture():
     """Create a test database session."""
-    engine = create_engine(
+    # Create test engine
+    test_engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SQLModel.metadata.create_all(engine)
 
-    with Session(engine) as session:
+    # Set as global engine for this test
+    set_engine(test_engine)
+
+    # Create tables
+    SQLModel.metadata.create_all(test_engine)
+
+    with Session(test_engine) as session:
         yield session
+
+    # Clean up
+    SQLModel.metadata.drop_all(test_engine)
 
 
 @pytest.fixture(name="client")

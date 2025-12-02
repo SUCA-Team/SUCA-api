@@ -49,6 +49,9 @@ services:
       ENV: ${ENV:-dev}
       DEBUG: ${DEBUG:-false}
       
+      # JWT Authentication
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-CHANGE-IN-PRODUCTION}
+      
       # CORS settings
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://akichiro.github.io
     depends_on:
