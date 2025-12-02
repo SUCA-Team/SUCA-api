@@ -6,12 +6,13 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel import Session
 
-from ..db.db import engine
+from ..db.db import get_engine
 from ..services.search_service import SearchService
 
 
 def get_session() -> Generator[Session, None, None]:
     """FastAPI dependency: yield a database Session and ensure it is closed."""
+    engine = get_engine()
     with Session(engine) as session:
         yield session
 
