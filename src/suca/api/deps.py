@@ -1,6 +1,8 @@
 """FastAPI dependencies for dependency injection."""
 
-from typing import Annotated, Generator
+from collections.abc import Generator
+from typing import Annotated
+
 from fastapi import Depends
 from sqlmodel import Session
 
@@ -14,9 +16,7 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
-def get_search_service(
-    session: Annotated[Session, Depends(get_session)]
-) -> SearchService:
+def get_search_service(session: Annotated[Session, Depends(get_session)]) -> SearchService:
     """FastAPI dependency: get SearchService instance."""
     return SearchService(session)
 

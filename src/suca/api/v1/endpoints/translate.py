@@ -10,7 +10,7 @@
 #         return {
 #             "notification": "Please enter text!"
 #         }
-    
+
 #     ip = q
 #     return {
 #         "original": ip,
@@ -23,7 +23,7 @@
 #         return {
 #             "notification": "Please enter text!"
 #         }
-    
+
 #     ip = q
 #     return {
 #         "original": ip,
