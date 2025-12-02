@@ -1,15 +1,20 @@
-# -*- coding: utf-8 -*-
 """
 Parse JMdict XML and import into PostgreSQL using SQLModel.
 Only English glosses are imported.
 """
 
 import json
+import os
+import sys
+
 from lxml import etree
 from sqlmodel import Session
-from db import init_db, engine, get_session
-from model import Entry, Kanji, Reading, Sense, Gloss, Example
 
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from src.suca.db.db import engine, get_session, init_db
+from src.suca.db.model import Entry, Example, Gloss, Kanji, Reading, Sense
 
 # === CONFIG ===
 JMDFILE = r"jm.db"  # Path to your JMdict file
@@ -17,13 +22,23 @@ BATCH_SIZE = 500
 LIMIT_ENTRIES = 100  # For testing only — set None for full parse
 
 PRIORITY_COMMON_KEYS = {
-    "news1", "news2", "ichi1", "ichi2",
-    "spec1", "spec2", "gai1", "gai2",
-    "nf01", "nf02", "nf03"
+    "news1",
+    "news2",
+    "ichi1",
+    "ichi2",
+    "spec1",
+    "spec2",
+    "gai1",
+    "gai2",
+    "nf01",
+    "nf02",
+    "nf03",
 }
+
 
 # === HELPERS ===
 def is_common_from_pris(pris):
+    """Check if word is common based on priority tags."""
     for p in pris:
         if not p:
             continue
@@ -32,23 +47,22 @@ def is_common_from_pris(pris):
                 return True
     return False
 
+
 def text_of(elem, tag):
+    """Extract text from XML element."""
     child = elem.find(tag)
     return child.text.strip() if child is not None and child.text else None
 
+
 # === MAIN PARSER ===
 def parse():
+    """Parse JMdict XML and import to database."""
     print("🚀 Initializing database (creating tables if needed)...")
     init_db()
 
     # Open XML as bytes to avoid encoding issues
     with open(JMDFILE, "rb") as f:
-        context = etree.iterparse(
-            f,
-            events=("end",),
-            tag="entry",
-            recover=True
-        )
+        context = etree.iterparse(f, events=("end",), tag="entry", recover=True)
 
         session = get_session() if callable(get_session) else Session(engine)
         count = 0
@@ -85,26 +99,27 @@ def parse():
                     re_inf = text_of(r_ele, "re_inf")
                     re_pri = text_of(r_ele, "re_pri")
                     if reb:
-                        readings.append({
-                            "reb": reb,
-                            "re_nokanji": re_nokanji,
-                            "re_pri": re_pri,
-                            "re_inf": re_inf
-                        })
+                        readings.append(
+                            {
+                                "reb": reb,
+                                "re_nokanji": re_nokanji,
+                                "re_pri": re_pri,
+                                "re_inf": re_inf,
+                            }
+                        )
                     if re_pri:
                         re_pris.append(re_pri)
 
                 is_common = is_common_from_pris(ke_pris + re_pris)
+
+                # Build Entry
                 entry_obj = Entry(ent_seq=ent_seq, is_common=is_common, jlpt_level=None)
 
                 # Add kanjis
                 for k in kanjis:
                     entry_obj.kanjis.append(
                         Kanji(
-                            keb=k["keb"],
-                            ke_inf=k["ke_inf"],
-                            ke_pri=k["ke_pri"],
-                            entry_id=ent_seq
+                            keb=k["keb"], ke_inf=k["ke_inf"], ke_pri=k["ke_pri"], entry_id=ent_seq
                         )
                     )
 
@@ -116,17 +131,27 @@ def parse():
                             re_nokanji=r["re_nokanji"],
                             re_pri=r["re_pri"],
                             re_inf=r["re_inf"],
-                            entry_id=ent_seq
+                            entry_id=ent_seq,
                         )
                     )
 
                 # === Sense & Gloss & Example ===
                 for s_elem in entry_elem.findall("sense"):
-                    pos_text = "; ".join([p.text.strip() for p in s_elem.findall("pos") if p.text]) or None
-                    field_text = "; ".join([f.text.strip() for f in s_elem.findall("field") if f.text]) or None
-                    misc_text = "; ".join([m.text.strip() for m in s_elem.findall("misc") if m.text]) or None
+                    pos_text = (
+                        "; ".join([p.text.strip() for p in s_elem.findall("pos") if p.text]) or None
+                    )
+                    field_text = (
+                        "; ".join([f.text.strip() for f in s_elem.findall("field") if f.text])
+                        or None
+                    )
+                    misc_text = (
+                        "; ".join([m.text.strip() for m in s_elem.findall("misc") if m.text])
+                        or None
+                    )
 
-                    sense_obj = Sense(entry_id=ent_seq, pos=pos_text, field=field_text, misc=misc_text)
+                    sense_obj = Sense(
+                        entry_id=ent_seq, pos=pos_text, field=field_text, misc=misc_text
+                    )
 
                     # English gloss only
                     for gloss in s_elem.findall("gloss"):
@@ -148,7 +173,11 @@ def parse():
                                 eng_sentence = ex_sent.text.strip() if ex_sent.text else None
                         if jp_sentence or eng_sentence:
                             sense_obj.examples.append(
-                                Example(text=json.dumps({"japanese": jp_sentence, "english": eng_sentence}))
+                                Example(
+                                    text=json.dumps(
+                                        {"japanese": jp_sentence, "english": eng_sentence}
+                                    )
+                                )
                             )
 
                     # Append sense to entry
@@ -173,6 +202,7 @@ def parse():
 
         finally:
             session.close()
+
 
 if __name__ == "__main__":
     parse()

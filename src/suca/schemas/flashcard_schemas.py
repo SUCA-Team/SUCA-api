@@ -1,47 +1,86 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import timezone
-from enum import Enum
+from datetime import datetime
 
-# class DifficultyLevel(str, Enum):
-#     EASY = "easy"
-#     MEDIUM = "medium"
-#     HARD = "hard"
+from pydantic import BaseModel, ConfigDict, Field
 
-# class StudyProgress(BaseModel):
-#     last_studied: Optional[datetime] = None
-#     times_studied: int = 0
-#     times_correct: int = 0
-#     difficulty: DifficultyLevel = DifficultyLevel.MEDIUM
-#     next_review: Optional[datetime] = None
 
-class Flashcard(BaseModel):
-    id: str = Field(alias="doc_id")
-    user_id: str
-    front: str
-    back: str
-    deck_id: Optional[str] = None
-    updated_at: Optional[str] = None
+class FlashcardBase(BaseModel):
+    """Base flashcard schema."""
 
-class FlashcardCreate(BaseModel):
-    deck_id: Optional[str] = None
-    front: str
-    back: str
-    
+    front: str = Field(..., min_length=1, max_length=1000)
+    back: str = Field(..., min_length=1, max_length=1000)
+
+
+class FlashcardCreate(FlashcardBase):
+    """Schema for creating flashcard (standalone endpoint)."""
+
+    deck_id: int
+
+
+class FlashcardCreateNested(FlashcardBase):
+    """Schema for creating flashcard (nested under deck endpoint)."""
+
+    # No deck_id here - it comes from URL path
+    pass
+
+
 class FlashcardUpdate(BaseModel):
-    deck_id: Optional[str] = None
-    front: Optional[str] = None
-    back: Optional[str] = None
+    """Schema for updating flashcard."""
 
-class FlashcardResponse(BaseModel):
-    flashcards: List[Flashcard]
+    front: str | None = Field(None, min_length=1, max_length=1000)
+    back: str | None = Field(None, min_length=1, max_length=1000)
+
+
+class FlashcardResponse(FlashcardBase):
+    """Schema for flashcard response."""
+
+    id: int
+    deck_id: int
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeckBase(BaseModel):
+    """Base deck schema."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class DeckCreate(DeckBase):
+    """Schema for creating deck."""
+
+    pass
+
+
+class DeckUpdate(BaseModel):
+    """Schema for updating deck."""
+
+    name: str | None = Field(None, min_length=1, max_length=200)
+
+
+class DeckResponse(DeckBase):
+    """Schema for deck response."""
+
+    id: int
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+    flashcard_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FlashcardListResponse(BaseModel):
+    """Schema for flashcard list response."""
+
+    flashcards: list[FlashcardResponse]
     total_count: int
-    has_more: bool
 
-class DeckCreate(BaseModel):
-    name: str
 
-# class StudySession(BaseModel):
-#     flashcard_id: str
-#     was_correct: bool
-#     difficulty_rating: Optional[DifficultyLevel] = None
+class DeckListResponse(BaseModel):
+    """Schema for deck list response."""
+
+    decks: list[DeckResponse]
+    total_count: int

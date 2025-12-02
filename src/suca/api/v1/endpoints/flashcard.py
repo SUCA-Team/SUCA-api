@@ -1,39 +1,198 @@
-import json
-from fastapi import APIRouter, Depends
-from sqlmodel import Session, select, SQLModel
-from suca.api.deps import get_session
-from src.suca.schemas.flashcard_schemas import *
+"""Flashcard endpoints."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session
+
+from ....api.deps import get_session
+from ....core.auth import get_current_user_id
+from ....core.exceptions import DatabaseException, ValidationException
+from ....schemas.flashcard_schemas import (
+    DeckCreate,
+    DeckListResponse,
+    DeckResponse,
+    DeckUpdate,
+    FlashcardCreate,
+    FlashcardCreateNested,
+    FlashcardListResponse,
+    FlashcardResponse,
+    FlashcardUpdate,
+)
+from ....services.flashcard_service import FlashcardService
 
 router = APIRouter(prefix="/flashcard", tags=["Flashcard"])
 
-@router.get("/list_decks")
-def list_flashcard_decks(session: Session = get_session()):
-    pass
 
-@router.post("/create_deck")
-def create_flashcard_deck(user_id: str = Depends(get_user_id), deck: DeckCreate, session: Session = get_session()):
-    pass
+def get_flashcard_service(session: Session = Depends(get_session)) -> FlashcardService:
+    """Get flashcard service instance."""
+    return FlashcardService(session)
 
-@router.post("/add_card")
-def add_flashcard(flashcard: FlashcardCreate, session: Session = get_session()):
-    pass
 
-@router.get("/get_cards")
-def get_flashcards(deck_id: str, session: Session = get_session()):
-    pass
+# Type aliases for dependencies
+UserIdDep = Annotated[str, Depends(get_current_user_id)]
+FlashcardServiceDep = Annotated[FlashcardService, Depends(get_flashcard_service)]
 
-@router.delete("/delete_card")
-def delete_flashcard(card_id: str, session: Session = get_session()):
-    pass
 
-@router.delete("/delete_deck")
-def delete_flashcard_deck(deck_id: str, session: Session = get_session()):
-    pass
+# ===== Deck Endpoints =====
 
-@router.put("/update_card")
-def update_flashcard(card_id: str, front: str | None = None, back: str | None = None, session: Session = get_session()):
-    pass
 
-@router.put("/update_deck")
-def update_flashcard_deck(deck_id: str, deck_name: str, session: Session = get_session()):
-    pass
+@router.get("/decks", response_model=DeckListResponse)
+def list_flashcard_decks(
+    user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> DeckListResponse:
+    """Get all decks for current user. Requires authentication."""
+    try:
+        return flashcard_service.get_user_decks(user_id)
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks", response_model=DeckResponse, status_code=201)
+def create_flashcard_deck(
+    deck: DeckCreate, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> DeckResponse:
+    """Create a new flashcard deck. Requires authentication."""
+    try:
+        return flashcard_service.create_deck(user_id, deck)
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/decks/{deck_id}", response_model=DeckResponse)
+def get_flashcard_deck(
+    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> DeckResponse:
+    """Get a specific deck. Requires authentication."""
+    try:
+        return flashcard_service.get_deck(deck_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/decks/{deck_id}", response_model=DeckResponse)
+def update_flashcard_deck(
+    deck_id: int,
+    deck_update: DeckUpdate,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> DeckResponse:
+    """Update a flashcard deck. Requires authentication."""
+    try:
+        return flashcard_service.update_deck(deck_id, user_id, deck_update)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/decks/{deck_id}", status_code=204)
+def delete_flashcard_deck(deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep):
+    """Delete a flashcard deck and all its cards. Requires authentication."""
+    try:
+        flashcard_service.delete_deck(deck_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Flashcard Endpoints (Nested under Decks) =====
+
+
+@router.get("/decks/{deck_id}/cards", response_model=FlashcardListResponse)
+def get_flashcards(
+    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> FlashcardListResponse:
+    """Get all flashcards in a deck. Requires authentication."""
+    try:
+        return flashcard_service.get_deck_flashcards(deck_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards", response_model=FlashcardResponse, status_code=201)
+def add_flashcard(
+    deck_id: int,
+    flashcard: FlashcardCreateNested,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> FlashcardResponse:
+    """Add a new flashcard to a deck. Requires authentication."""
+    try:
+        flashcard_with_deck = FlashcardCreate(
+            deck_id=deck_id, front=flashcard.front, back=flashcard.back
+        )
+        return flashcard_service.create_flashcard(user_id, flashcard_with_deck)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/decks/{deck_id}/cards/{card_id}", response_model=FlashcardResponse)
+def get_flashcard(
+    deck_id: int, card_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> FlashcardResponse:
+    """Get a specific flashcard. Requires authentication."""
+    try:
+        flashcard = flashcard_service.get_flashcard(card_id, user_id)
+
+        if flashcard.deck_id != deck_id:
+            raise HTTPException(
+                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
+            )
+
+        return flashcard
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/decks/{deck_id}/cards/{card_id}", response_model=FlashcardResponse)
+def update_flashcard(
+    deck_id: int,
+    card_id: int,
+    flashcard_update: FlashcardUpdate,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> FlashcardResponse:
+    """Update a flashcard. Requires authentication."""
+    try:
+        flashcard = flashcard_service.get_flashcard(card_id, user_id)
+
+        if flashcard.deck_id != deck_id:
+            raise HTTPException(
+                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
+            )
+
+        return flashcard_service.update_flashcard(card_id, user_id, flashcard_update)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/decks/{deck_id}/cards/{card_id}", status_code=204)
+def delete_flashcard(
+    deck_id: int, card_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+):
+    """Delete a flashcard. Requires authentication."""
+    try:
+        flashcard = flashcard_service.get_flashcard(card_id, user_id)
+
+        if flashcard.deck_id != deck_id:
+            raise HTTPException(
+                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
+            )
+
+        flashcard_service.delete_flashcard(card_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
