@@ -6,7 +6,6 @@ A modern Japanese dictionary API with flashcard management, built with FastAPI. 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.118-009688.svg)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![CI](https://github.com/yourusername/SUCA-api/workflows/CI/badge.svg)](https://github.com/yourusername/SUCA-api/actions)
 
 ---
 
