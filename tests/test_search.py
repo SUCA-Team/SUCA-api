@@ -1,13 +1,12 @@
 """Tests for search functionality."""
 
+from unittest.mock import Mock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
-from unittest.mock import Mock, patch
 
-from src.suca.core.exceptions import SearchException
 from src.suca.schemas.search import SearchRequest, SearchResponse
-from src.suca.services.search_service import SearchService
 
 
 def test_search_endpoint(client: TestClient):
@@ -21,7 +20,7 @@ def test_search_endpoint(client: TestClient):
         success=True,
     )
 
-    with patch("src.suca.api.v1.endpoints.search.SearchServiceDep") as mock_dep:
+    with patch("src.suca.api.v1.endpoints.search.SearchServiceDep"):
         mock_service = Mock()
         mock_service.search_entries.return_value = mock_response
 

@@ -1,14 +1,14 @@
 """Database configuration and initialization."""
 
-from typing import Optional
-from sqlmodel import SQLModel, create_engine
+
 from sqlalchemy.engine import Engine
+from sqlmodel import SQLModel, create_engine
 
 from ..core.config import settings
 from ..utils.logging import logger
 
 # Global engine instance (lazy initialization)
-_engine: Optional[Engine] = None
+_engine: Engine | None = None
 
 
 def get_engine() -> Engine:
@@ -19,7 +19,7 @@ def get_engine() -> Engine:
     return _engine
 
 
-def create_database_engine(database_url: Optional[str] = None) -> Engine:
+def create_database_engine(database_url: str | None = None) -> Engine:
     """Create database engine based on configuration."""
     url = database_url or settings.database_url
     try:
