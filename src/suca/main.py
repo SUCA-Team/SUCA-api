@@ -84,7 +84,7 @@ app = FastAPI(
 
 # Add rate limiter
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # Configure CORS
 app.add_middleware(
@@ -96,10 +96,10 @@ app.add_middleware(
 )
 
 # Exception handlers
-app.add_exception_handler(SUCAException, suca_exception_handler)
-app.add_exception_handler(HTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
+app.add_exception_handler(SUCAException, suca_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, general_exception_handler)  # type: ignore[arg-type]
 
 # Include API routes
 app.include_router(api_router)
