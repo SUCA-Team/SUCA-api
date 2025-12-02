@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import ClassVar
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -64,7 +65,7 @@ class Example(SQLModel, table=True):
 class FlashcardDeck(SQLModel, table=True):
     """Flashcard deck model."""
 
-    __tablename__ = "flashcard_decks"
+    __tablename__: ClassVar[str] = "flashcard_decks"  # type: ignore[misc]
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: str = Field(index=True)
@@ -79,7 +80,7 @@ class FlashcardDeck(SQLModel, table=True):
 class Flashcard(SQLModel, table=True):
     """Flashcard model."""
 
-    __tablename__ = "flashcards"
+    __tablename__: ClassVar[str] = "flashcards"  # type: ignore[misc]
 
     id: int | None = Field(default=None, primary_key=True)
     deck_id: int = Field(foreign_key="flashcard_decks.id", index=True)

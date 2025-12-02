@@ -107,9 +107,7 @@ class SearchService(BaseService[Entry]):
                 ),
                 # Contains anywhere
                 (
-                    and_(
-                        func.lower(col(Gloss.text)).like(word_pattern), col(Entry.is_common)
-                    ),
+                    and_(func.lower(col(Gloss.text)).like(word_pattern), col(Entry.is_common)),
                     10100,
                 ),
                 # RARE WORDS
