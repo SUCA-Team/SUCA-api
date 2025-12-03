@@ -1,6 +1,5 @@
 """Database configuration and initialization."""
 
-
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel, create_engine
 
