@@ -239,13 +239,13 @@ docker-prod-logs: ## Show production logs
 
 # Docker - Database Operations
 docker-db-shell: ## Connect to PostgreSQL shell
-	docker-compose exec db psql -U postgres -d suca
+	docker-compose exec db psql -U suca -d jmdict
 
 docker-db-backup: ## Backup database to file
-	docker-compose exec db pg_dump -U postgres suca > backup_$$(date +%Y%m%d_%H%M%S).sql
+	docker-compose exec db pg_dump -U suca jmdict > backup_$$(date +%Y%m%d_%H%M%S).sql
 
 docker-db-restore: ## Restore database from file (usage: make docker-db-restore FILE=backup.sql)
-	docker-compose exec -T db psql -U postgres suca < dump.sql
+	docker-compose exec -T db psql -U suca -d jmdict < dump.sql
 
 docker-migrate: ## Run migrations in Docker
 	docker-compose exec api poetry run alembic upgrade head
