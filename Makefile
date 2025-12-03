@@ -178,20 +178,141 @@ clean-all: clean ## Clean everything including Poetry cache
 	@echo "Deep cleanup complete!"
 
 # ============================================================================
-# Docker Operations (Optional)
+# Docker Operations
 # ============================================================================
 
-docker-build: ## Build Docker image
+docker-build: ## Build production Docker image
 	docker build -t suca-api:latest .
 
-docker-run: ## Run Docker container
+docker-build-dev: ## Build development Docker image
+	docker build -f Dockerfile.dev -t suca-api:dev .
+
+docker-run: ## Run production Docker container
 	docker run -p 8000:8000 --env-file .env suca-api:latest
 
-docker-compose-up: ## Start services with docker-compose
+docker-run-dev: ## Run development Docker container with volume
+	docker run -p 8000:8000 --env-file .env -v $$(pwd)/src:/app/src suca-api:dev
+
+# Docker Compose - Development
+docker-up: ## Start all services (development mode)
 	docker-compose up -d
 
-docker-compose-down: ## Stop docker-compose services
+docker-up-build: ## Build and start all services
+	docker-compose up -d --build
+
+docker-down: ## Stop all services
 	docker-compose down
+
+docker-down-volumes: ## Stop services and remove volumes (WARNING: deletes data!)
+	docker-compose down -v
+
+docker-logs: ## Show logs from all services
+	docker-compose logs -f
+
+docker-logs-api: ## Show API logs only
+	docker-compose logs -f api
+
+docker-logs-db: ## Show database logs only
+	docker-compose logs -f db
+
+docker-restart: ## Restart all services
+	docker-compose restart
+
+docker-restart-api: ## Restart API service only
+	docker-compose restart api
+
+docker-ps: ## Show running containers
+	docker-compose ps
+
+# Docker Compose - Production
+docker-prod-up: ## Start production services
+	docker-compose -f docker-compose.prod.yml up -d
+
+docker-prod-build: ## Build and start production services
+	docker-compose -f docker-compose.prod.yml up -d --build
+
+docker-prod-down: ## Stop production services
+	docker-compose -f docker-compose.prod.yml down
+
+docker-prod-logs: ## Show production logs
+	docker-compose -f docker-compose.prod.yml logs -f
+
+# Docker - Database Operations
+docker-db-shell: ## Connect to PostgreSQL shell
+	docker-compose exec db psql -U postgres -d suca
+
+docker-db-backup: ## Backup database to file
+	docker-compose exec db pg_dump -U postgres suca > backup_$$(date +%Y%m%d_%H%M%S).sql
+
+docker-db-restore: ## Restore database from file (usage: make docker-db-restore FILE=backup.sql)
+	docker-compose exec -T db psql -U postgres suca < $(FILE)
+
+docker-migrate: ## Run migrations in Docker
+	docker-compose exec api poetry run alembic upgrade head
+
+docker-migrate-create: ## Create new migration in Docker (usage: make docker-migrate-create MSG="add table")
+	docker-compose exec api poetry run alembic revision --autogenerate -m "$(MSG)"
+
+docker-db-reset: ## Reset database in Docker (WARNING: destroys all data!)
+	docker-compose exec api poetry run alembic downgrade base
+	docker-compose exec api poetry run alembic upgrade head
+
+# Docker - Testing
+docker-test: ## Run tests in Docker
+	docker-compose exec api poetry run pytest
+
+docker-test-cov: ## Run tests with coverage in Docker
+	docker-compose exec api poetry run pytest --cov=src/suca --cov-report=html
+
+docker-lint: ## Run linting in Docker
+	docker-compose exec api poetry run ruff check .
+
+docker-format: ## Format code in Docker
+	docker-compose exec api poetry run ruff format .
+
+# Docker - Shell Access
+docker-shell: ## Open shell in API container
+	docker-compose exec api /bin/bash
+
+docker-shell-db: ## Open shell in database container
+	docker-compose exec db /bin/bash
+
+docker-python: ## Open Python shell in API container
+	docker-compose exec api poetry run python
+
+# Docker - Utilities
+docker-stats: ## Show container resource usage
+	docker stats
+
+docker-clean: ## Remove stopped containers and unused images
+	docker-compose down
+	docker system prune -f
+
+docker-clean-all: ## Remove everything (WARNING: nuclear option!)
+	docker-compose down -v
+	docker system prune -af --volumes
+
+docker-rebuild: ## Rebuild and restart services
+	docker-compose down
+	docker-compose build --no-cache
+	docker-compose up -d
+
+# Docker - Tools (pgAdmin)
+docker-tools-up: ## Start development tools (pgAdmin)
+	docker-compose --profile tools up -d
+
+docker-tools-down: ## Stop development tools
+	docker-compose --profile tools down
+
+# Docker - Quick Workflows
+docker-dev: docker-up-build docker-migrate ## Quick start for development
+	@echo "Development environment started!"
+	@echo "API: http://localhost:8000"
+	@echo "Docs: http://localhost:8000/docs"
+	@echo "pgAdmin: http://localhost:5050 (use --profile tools)"
+
+docker-fresh: docker-down-volumes docker-up-build docker-migrate ## Fresh start with clean database
+	@echo "Fresh development environment started!"
 
 # ============================================================================
 # Development Utilities

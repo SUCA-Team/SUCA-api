@@ -10,20 +10,18 @@ services:
     container_name: suca-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-cynmeiciel}
-      POSTGRES_PASSWORD: ${DB_PASS:-tvduyeplmr}
-      POSTGRES_DB: ${DB_NAME:-jmdict}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
+      POSTGRES_DB: ${DB_NAME:-suca}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       # Persist database data
       - postgres_data:/var/lib/postgresql/data
-      # Optional: Add initialization scripts
-      # - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - suca-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cynmeiciel}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +30,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: suca-api
     restart: unless-stopped
     ports:
@@ -41,29 +39,39 @@ services:
       # Database connection
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: ${DB_USER:-cynmeiciel}
-      DB_PASS: ${DB_PASS:-tvduyeplmr}
-      DB_NAME: ${DB_NAME:-jmdict}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
+      DB_NAME: ${DB_NAME:-suca}
       
       # API settings
       ENV: ${ENV:-dev}
-      DEBUG: ${DEBUG:-false}
+      DEBUG: ${DEBUG:-true}
       
       # JWT Authentication
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-CHANGE-IN-PRODUCTION}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       
       # CORS settings
-      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://akichiro.github.io
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      
+      # SQLAlchemy
+      SQLALCHEMY_ECHO: ${SQLALCHEMY_ECHO:-false}
     depends_on:
       db:
         condition: service_healthy
     networks:
       - suca-network
     volumes:
-      # Mount code for development (comment out for production)
+      # Mount code for development hot-reload
       - ./src:/app/src
-      # Mount logs directory
-      - ./logs:/app/logs
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+      - ./alembic:/app/alembic
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Optional: PgAdmin for database management
   pgadmin:
