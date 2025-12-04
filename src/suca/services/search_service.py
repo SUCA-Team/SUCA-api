@@ -344,6 +344,10 @@ class SearchService(BaseService[Entry]):
         if request.pos:
             stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
 
+        # Filter by part of speech if requested
+        if request.pos:
+            stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
+
         # Execute and process results
         results = self.session.exec(stmt).all()
         return self._process_search_results(results, request, query, "English")
@@ -448,6 +452,10 @@ class SearchService(BaseService[Entry]):
         # If not including rare words, filter by commonality (exclude entries with no priority markers)
         if not request.include_rare:
             stmt = stmt.having(commonality_bonus > 0)
+
+        # Filter by part of speech if requested
+        if request.pos:
+            stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
 
         # Filter by part of speech if requested
         if request.pos:
