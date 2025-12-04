@@ -7,7 +7,6 @@ from sqlmodel import Field, Relationship, SQLModel
 # Database models for the SUCA dictionary
 class Entry(SQLModel, table=True):
     ent_seq: int = Field(primary_key=True)
-    is_common: bool = Field(index=True)  # Index for filtering common words
     jlpt_level: str | None = Field(default=None, index=True)  # Index for JLPT filtering
 
     kanjis: list["Kanji"] = Relationship(back_populates="entry")
