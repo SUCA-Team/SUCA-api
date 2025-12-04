@@ -781,18 +781,37 @@ make db-reset        # Downgrade to base, then upgrade to head (DANGER)
 
 **Docker migrations:**
 ```bash
-make docker-migrate                      # Apply migrations in container
-make docker-migrate-create MSG="..."     # Create migration in container
-docker-compose exec api poetry run alembic history  # View history
+# Apply all pending migrations
+make docker-migrate
+
+# Create a new migration from model changes
+make docker-migrate-create MSG="add new table"
+# or
+docker-compose exec api poetry run alembic revision --autogenerate -m "add new table"
+
+# View migration history
+docker-compose exec api poetry run alembic history
+
+# Check current version
+docker-compose exec api poetry run alembic current
+
+# Manual migration creation (for custom SQL)
+docker-compose exec api poetry run alembic revision -m "custom changes"
 ```
+
+**⚠️ Important for Team Development:**
+- The `alembic/versions/` directory is mounted as a volume in Docker
+- Migration files created in the container are immediately visible on your host machine
+- Your team can commit migration files to Git and others will see them automatically
+- No need to rebuild Docker images when adding new migrations
+- Always run `make docker-migrate` after pulling new migrations from Git
 
 ### Performance Indexes
 
 Optimized indexes for fast search queries:
 
 **Entry table:**
-- `ix_entry_is_common` (is_common) - Filter common/rare
-- `ix_entry_jlpt_level` (jlpt_level) - JLPT filtering
+- `ix_entry_jlpt_level` (jlpt_level) - JLPT level filtering
 
 **Kanji table:**
 - `ix_kanji_keb` (keb) - Japanese text search with LIKE
