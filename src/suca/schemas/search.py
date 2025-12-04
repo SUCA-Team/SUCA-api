@@ -36,10 +36,16 @@ class SearchResponse(BaseResponse):
     total_count: int = Field(description="Total number of results found")
     query: str | None = Field(None, description="Original search query")
 
+class SearchSuggestionResponse(BaseModel):
+    """Response model for search suggestions."""
+
+    suggestions: list[str] = Field(description="List of suggested words")
+
 
 class SearchRequest(BaseModel):
     """Request model for search operations."""
 
     query: str = Field(min_length=1, description="Search query")
     limit: int = Field(default=10, ge=1, le=100, description="Maximum results to return")
+    page: int = Field(default=1, ge=1, description="Page number for paginated results")
     include_rare: bool = Field(default=False, description="Include rare/uncommon words")

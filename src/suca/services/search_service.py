@@ -7,7 +7,7 @@ from sqlmodel import Session, and_, col, or_, select
 
 from ..core.exceptions import SearchException
 from ..db.model import Entry, Gloss, Kanji, Reading, Sense
-from ..schemas.search import DictionaryEntryResponse, MeaningResponse, SearchRequest, SearchResponse
+from ..schemas.search import DictionaryEntryResponse, MeaningResponse, SearchRequest, SearchResponse, SearchSuggestionResponse
 from .base import BaseService
 
 
@@ -368,3 +368,37 @@ class SearchService(BaseService[Entry]):
             tags=tags,
             variants=variants,
         )
+    
+    def get_suggestions(self, request: SearchRequest) -> SearchSuggestionResponse:
+        """
+        Get search suggestions based on partial query.
+
+        Suggestions are derived from kanji and reading forms that start with the query.
+        Common words are prioritized.
+        """
+        query = request.query.strip()
+        if not query:
+            raise SearchException("Search query cannot be empty")
+
+        starts_pattern = f"{query}%"
+
+        # Build the query for suggestions
+        stmt = (
+            select(col(Kanji.keb))
+            .select_from(Entry)
+            .join(Kanji, col(Entry.ent_seq) == col(Kanji.entry_id))
+            .where(col(Kanji.keb).like(starts_pattern))
+            .group_by(col(Kanji.keb), col(Entry.is_common))
+            .order_by(col(Entry.is_common).desc(), func.min(func.length(col(Kanji.keb))).asc())
+            .limit(request.limit)
+        )
+
+        # If not including rare words, filter by common
+        if not request.include_rare:
+            stmt = stmt.where(col(Entry.is_common))
+
+        # Execute and fetch suggestions
+        results = self.session.exec(stmt).all()
+
+        # suggestions = [keb for keb in results]
+        return SearchSuggestionResponse(suggestions=list(results))

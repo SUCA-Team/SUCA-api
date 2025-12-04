@@ -10,9 +10,20 @@ services:
     container_name: suca-db
     restart: unless-stopped
     environment:
+<<<<<<< Updated upstream
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASS:-postgres}
       POSTGRES_DB: ${DB_NAME:-suca}
+=======
+<<<<<<< Updated upstream
+      POSTGRES_USER: ${DB_USER:-cynmeiciel}
+      POSTGRES_PASSWORD: ${DB_PASS:-tvduyeplmr}
+=======
+      POSTGRES_USER: ${DB_USER:-suca}
+      POSTGRES_PASSWORD: ${DB_PASS:-suca}
+>>>>>>> Stashed changes
+      POSTGRES_DB: ${DB_NAME:-jmdict}
+>>>>>>> Stashed changes
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
@@ -39,9 +50,20 @@ services:
       # Database connection
       DB_HOST: db
       DB_PORT: 5432
+<<<<<<< Updated upstream
       DB_USER: ${DB_USER:-postgres}
       DB_PASS: ${DB_PASS:-postgres}
       DB_NAME: ${DB_NAME:-suca}
+=======
+<<<<<<< Updated upstream
+      DB_USER: ${DB_USER:-cynmeiciel}
+      DB_PASS: ${DB_PASS:-tvduyeplmr}
+=======
+      DB_USER: ${DB_USER:-suca}
+      DB_PASS: ${DB_PASS:-suca}
+>>>>>>> Stashed changes
+      DB_NAME: ${DB_NAME:-jmdict}
+>>>>>>> Stashed changes
       
       # API settings
       ENV: ${ENV:-dev}
