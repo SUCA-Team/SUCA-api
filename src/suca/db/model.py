@@ -7,8 +7,8 @@ from sqlmodel import Field, Relationship, SQLModel
 # Database models for the SUCA dictionary
 class Entry(SQLModel, table=True):
     ent_seq: int = Field(primary_key=True)
-    is_common: bool
-    jlpt_level: str | None = None
+    is_common: bool = Field(index=True)  # Index for filtering common words
+    jlpt_level: str | None = Field(default=None, index=True)  # Index for JLPT filtering
 
     kanjis: list["Kanji"] = Relationship(back_populates="entry")
     readings: list["Reading"] = Relationship(back_populates="entry")
@@ -17,26 +17,26 @@ class Entry(SQLModel, table=True):
 
 class Kanji(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    keb: str
+    keb: str = Field(index=True)  # Index for text search
     ke_inf: str | None = None
     ke_pri: str | None = None
-    entry_id: int = Field(foreign_key="entry.ent_seq")
+    entry_id: int = Field(foreign_key="entry.ent_seq", index=True)
     entry: "Entry" = Relationship(back_populates="kanjis")
 
 
 class Reading(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    reb: str
+    reb: str = Field(index=True)  # Index for text search
     re_nokanji: str | None = None
     re_pri: str | None = None
     re_inf: str | None = None
-    entry_id: int = Field(foreign_key="entry.ent_seq")
+    entry_id: int = Field(foreign_key="entry.ent_seq", index=True)
     entry: "Entry" = Relationship(back_populates="readings")
 
 
 class Sense(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    entry_id: int = Field(foreign_key="entry.ent_seq")
+    entry_id: int = Field(foreign_key="entry.ent_seq", index=True)
     pos: str | None = None
     field: str | None = None
     misc: str | None = None
@@ -48,15 +48,15 @@ class Sense(SQLModel, table=True):
 
 class Gloss(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    sense_id: int = Field(foreign_key="sense.id")
-    lang: str
-    text: str
+    sense_id: int = Field(foreign_key="sense.id", index=True)
+    lang: str = Field(index=True)  # Index for language filtering
+    text: str = Field(index=True)  # Index for text search
     sense: "Sense" = Relationship(back_populates="glosses")
 
 
 class Example(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    sense_id: int = Field(foreign_key="sense.id")
+    sense_id: int = Field(foreign_key="sense.id", index=True)
     text: str
     sense: "Sense" = Relationship(back_populates="examples")
 
