@@ -257,6 +257,9 @@ docker-db-reset: ## Reset database in Docker (WARNING: destroys all data!)
 	docker-compose exec api poetry run alembic downgrade base
 	docker-compose exec api poetry run alembic upgrade head
 
+docker-db-downgrade: ## Rollback last migration in Docker
+	docker-compose exec api poetry run alembic downgrade -1
+
 # Docker - Testing
 docker-test: ## Run tests in Docker
 	docker-compose exec api poetry run pytest
