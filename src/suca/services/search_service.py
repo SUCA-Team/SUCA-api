@@ -20,6 +20,13 @@ from .base import BaseService
 class SearchService(BaseService[Entry]):
     """Service for search operations with optimized queries."""
 
+    # Priority scoring constants
+    EXACT_MATCH = 1000
+    STARTS_WITH = 500
+    CONTAINS_WORD = 300  # For English word boundary matches
+    CONTAINS = 100
+    COMMON_BONUS = 10000  # Bonus for common words
+
     def __init__(self, session: Session):
         super().__init__(session)
 
@@ -31,6 +38,68 @@ class SearchService(BaseService[Entry]):
         # Remove spaces and check if all characters are ASCII
         cleaned = query.strip()
         return cleaned.isascii() and cleaned.replace(" ", "").replace("-", "").isalpha()
+
+    def _get_word_length_expr(self):
+        """
+        Create SQLAlchemy expression for word length calculation.
+        Returns the minimum length among all kanji and reading forms.
+        """
+        kanji_min_length = func.min(func.length(col(Kanji.keb)))
+        reading_min_length = func.min(func.length(col(Reading.reb)))
+        return func.coalesce(
+            func.least(kanji_min_length, reading_min_length),
+            kanji_min_length,
+            reading_min_length,
+            999,
+        ).label("word_length")
+
+    def _process_search_results(
+        self, results, request: SearchRequest, query: str, search_type: str
+    ) -> SearchResponse:
+        """
+        Process search results: deduplicate, paginate, fetch full entries, and format response.
+
+        Args:
+            results: Raw query results [(ent_seq, priority, length), ...]
+            request: Original search request with limit/page
+            query: Search query string
+            search_type: "English" or "Japanese" for message formatting
+
+        Returns:
+            SearchResponse with formatted results
+        """
+        if not results:
+            return SearchResponse(
+                results=[], total_count=0, query=query, message=f"No results found for '{query}'"
+            )
+
+        # Get unique entry IDs preserving priority order
+        seen: set[int] = set()
+        unique_entry_ids = []
+        for ent_seq, _priority, _length in results:
+            if ent_seq not in seen:
+                seen.add(ent_seq)
+                unique_entry_ids.append(ent_seq)
+                if len(unique_entry_ids) >= request.limit:
+                    break
+
+        # Fetch full entry data
+        entries_stmt = select(Entry).where(col(Entry.ent_seq).in_(unique_entry_ids))
+        entries = self.session.exec(entries_stmt).all()
+
+        # Create ordered results
+        entry_map = {e.ent_seq: e for e in entries}
+        ordered_entries = [entry_map[ent_id] for ent_id in unique_entry_ids if ent_id in entry_map]
+
+        # Convert to response format
+        response_results = [self._entry_to_response(entry) for entry in ordered_entries]
+
+        return SearchResponse(
+            results=response_results,
+            total_count=len(seen),
+            query=query,
+            message=f"Found {len(seen)} results for '{query}' ({search_type} search)",
+        )
 
     def search_entries(self, request: SearchRequest) -> SearchResponse:
         """
@@ -87,7 +156,7 @@ class SearchService(BaseService[Entry]):
                 # Exact match (whole gloss)
                 (
                     and_(func.lower(col(Gloss.text)) == query_lower, col(Entry.is_common)),
-                    11000,
+                    self.EXACT_MATCH + self.COMMON_BONUS,
                 ),
                 # Starts with query
                 (
@@ -95,7 +164,7 @@ class SearchService(BaseService[Entry]):
                         func.lower(col(Gloss.text)).like(starts_pattern),
                         col(Entry.is_common),
                     ),
-                    10500,
+                    self.STARTS_WITH + self.COMMON_BONUS,
                 ),
                 # Contains as separate word (with word boundaries)
                 (
@@ -109,16 +178,16 @@ class SearchService(BaseService[Entry]):
                         ),
                         col(Entry.is_common),
                     ),
-                    10300,
+                    self.CONTAINS_WORD + self.COMMON_BONUS,
                 ),
                 # Contains anywhere
                 (
                     and_(func.lower(col(Gloss.text)).like(word_pattern), col(Entry.is_common)),
-                    10100,
+                    self.CONTAINS + self.COMMON_BONUS,
                 ),
                 # RARE WORDS
-                (func.lower(col(Gloss.text)) == query_lower, 1000),
-                (func.lower(col(Gloss.text)).like(starts_pattern), 500),
+                (func.lower(col(Gloss.text)) == query_lower, self.EXACT_MATCH),
+                (func.lower(col(Gloss.text)).like(starts_pattern), self.STARTS_WITH),
                 (
                     or_(
                         func.lower(col(Gloss.text)).like(f"% {query_lower} %"),
@@ -127,22 +196,15 @@ class SearchService(BaseService[Entry]):
                         func.lower(col(Gloss.text)).like(f"% {query_lower},%"),
                         func.lower(col(Gloss.text)).like(f"% {query_lower};%"),
                     ),
-                    300,
+                    self.CONTAINS_WORD,
                 ),
-                (func.lower(col(Gloss.text)).like(word_pattern), 100),
+                (func.lower(col(Gloss.text)).like(word_pattern), self.CONTAINS),
                 else_=0,
             )
         ).label("priority")
 
         # Word length for secondary sorting
-        kanji_min_length = func.min(func.length(col(Kanji.keb)))
-        reading_min_length = func.min(func.length(col(Reading.reb)))
-        word_length = func.coalesce(
-            func.least(kanji_min_length, reading_min_length),
-            kanji_min_length,
-            reading_min_length,
-            999,
-        ).label("word_length")
+        word_length = self._get_word_length_expr()
 
         # Build the main query
         stmt = (
@@ -165,39 +227,7 @@ class SearchService(BaseService[Entry]):
 
         # Execute and process results
         results = self.session.exec(stmt).all()
-
-        if not results:
-            return SearchResponse(
-                results=[], total_count=0, query=query, message=f"No results found for '{query}'"
-            )
-
-        # Get unique entry IDs preserving priority order
-        seen: set[int] = set()
-        unique_entry_ids = []
-        for ent_seq, _priority, _length in results:
-            if ent_seq not in seen:
-                seen.add(ent_seq)
-                unique_entry_ids.append(ent_seq)
-                if len(unique_entry_ids) >= request.limit:
-                    break
-
-        # Fetch full entry data
-        entries_stmt = select(Entry).where(col(Entry.ent_seq).in_(unique_entry_ids))
-        entries = self.session.exec(entries_stmt).all()
-
-        # Create ordered results
-        entry_map = {e.ent_seq: e for e in entries}
-        ordered_entries = [entry_map[ent_id] for ent_id in unique_entry_ids if ent_id in entry_map]
-
-        # Convert to response format
-        response_results = [self._entry_to_response(entry) for entry in ordered_entries]
-
-        return SearchResponse(
-            results=response_results,
-            total_count=len(seen),
-            query=query,
-            message=f"Found {len(seen)} results for '{query}' (English search)",
-        )
+        return self._process_search_results(results, request, query, "English")
 
     def _search_by_japanese(self, query: str, request: SearchRequest) -> SearchResponse:
         """
@@ -228,38 +258,49 @@ class SearchService(BaseService[Entry]):
         priority_score = func.max(
             case(
                 # COMMON WORDS (score 10000+)
-                # Exact matches - common (11000)
-                (and_(col(Kanji.keb) == query, col(Entry.is_common)), 11000),
-                (and_(col(Reading.reb) == query, col(Entry.is_common)), 11000),
-                # Starts with - common (10500)
-                (and_(col(Kanji.keb).like(f"{query}%"), col(Entry.is_common)), 10500),
-                (and_(col(Reading.reb).like(f"{query}%"), col(Entry.is_common)), 10500),
-                # Contains - common (10100)
-                (and_(col(Kanji.keb).like(f"%{query}%"), col(Entry.is_common)), 10100),
-                (and_(col(Reading.reb).like(f"%{query}%"), col(Entry.is_common)), 10100),
+                # Exact matches - common
+                (
+                    and_(col(Kanji.keb) == query, col(Entry.is_common)),
+                    self.EXACT_MATCH + self.COMMON_BONUS,
+                ),
+                (
+                    and_(col(Reading.reb) == query, col(Entry.is_common)),
+                    self.EXACT_MATCH + self.COMMON_BONUS,
+                ),
+                # Starts with - common
+                (
+                    and_(col(Kanji.keb).like(f"{query}%"), col(Entry.is_common)),
+                    self.STARTS_WITH + self.COMMON_BONUS,
+                ),
+                (
+                    and_(col(Reading.reb).like(f"{query}%"), col(Entry.is_common)),
+                    self.STARTS_WITH + self.COMMON_BONUS,
+                ),
+                # Contains - common
+                (
+                    and_(col(Kanji.keb).like(f"%{query}%"), col(Entry.is_common)),
+                    self.CONTAINS + self.COMMON_BONUS,
+                ),
+                (
+                    and_(col(Reading.reb).like(f"%{query}%"), col(Entry.is_common)),
+                    self.CONTAINS + self.COMMON_BONUS,
+                ),
                 # RARE WORDS (score <10000)
-                # Exact matches - rare (1000)
-                (col(Kanji.keb) == query, 1000),
-                (col(Reading.reb) == query, 1000),
-                # Starts with - rare (500)
-                (col(Kanji.keb).like(f"{query}%"), 500),
-                (col(Reading.reb).like(f"{query}%"), 500),
-                # Contains - rare (100)
-                (col(Kanji.keb).like(f"%{query}%"), 100),
-                (col(Reading.reb).like(f"%{query}%"), 100),
+                # Exact matches - rare
+                (col(Kanji.keb) == query, self.EXACT_MATCH),
+                (col(Reading.reb) == query, self.EXACT_MATCH),
+                # Starts with - rare
+                (col(Kanji.keb).like(f"{query}%"), self.STARTS_WITH),
+                (col(Reading.reb).like(f"{query}%"), self.STARTS_WITH),
+                # Contains - rare
+                (col(Kanji.keb).like(f"%{query}%"), self.CONTAINS),
+                (col(Reading.reb).like(f"%{query}%"), self.CONTAINS),
                 else_=0,
             )
         ).label("priority")
 
-        # Word length for secondary sorting (use MIN to get shortest form)
-        kanji_min_length = func.min(func.length(col(Kanji.keb)))
-        reading_min_length = func.min(func.length(col(Reading.reb)))
-        word_length = func.coalesce(
-            func.least(kanji_min_length, reading_min_length),
-            kanji_min_length,
-            reading_min_length,
-            999,
-        ).label("word_length")
+        # Word length for secondary sorting
+        word_length = self._get_word_length_expr()
 
         # Build the main query
         stmt = (
@@ -279,41 +320,9 @@ class SearchService(BaseService[Entry]):
         if not request.include_rare:
             stmt = stmt.where(col(Entry.is_common))
 
-        # Execute and get entry IDs with their scores
+        # Execute and process results
         results = self.session.exec(stmt).all()
-
-        if not results:
-            return SearchResponse(
-                results=[], total_count=0, query=query, message=f"No results found for '{query}'"
-            )
-
-        # Get unique entry IDs preserving priority order
-        seen: set[int] = set()
-        unique_entry_ids = []
-        for ent_seq, _priority, _length in results:
-            if ent_seq not in seen:
-                seen.add(ent_seq)
-                unique_entry_ids.append(ent_seq)
-                if len(unique_entry_ids) >= request.limit:
-                    break
-
-        # Fetch full entry data in one query
-        entries_stmt = select(Entry).where(col(Entry.ent_seq).in_(unique_entry_ids))
-        entries = self.session.exec(entries_stmt).all()
-
-        # Create a mapping for ordered results
-        entry_map = {e.ent_seq: e for e in entries}
-        ordered_entries = [entry_map[ent_id] for ent_id in unique_entry_ids if ent_id in entry_map]
-
-        # Convert to response format
-        response_results = [self._entry_to_response(entry) for entry in ordered_entries]
-
-        return SearchResponse(
-            results=response_results,
-            total_count=len(seen),
-            query=query,
-            message=f"Found {len(seen)} results for '{query}' (Japanese search)",
-        )
+        return self._process_search_results(results, request, query, "Japanese")
 
     def _entry_to_response(self, entry: Entry) -> DictionaryEntryResponse:
         """Convert Entry model to response format efficiently."""
