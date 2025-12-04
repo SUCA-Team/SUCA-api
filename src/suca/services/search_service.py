@@ -7,7 +7,13 @@ from sqlmodel import Session, and_, col, or_, select
 
 from ..core.exceptions import SearchException
 from ..db.model import Entry, Gloss, Kanji, Reading, Sense
-from ..schemas.search import DictionaryEntryResponse, MeaningResponse, SearchRequest, SearchResponse, SearchSuggestionResponse
+from ..schemas.search import (
+    DictionaryEntryResponse,
+    MeaningResponse,
+    SearchRequest,
+    SearchResponse,
+    SearchSuggestionResponse,
+)
 from .base import BaseService
 
 
@@ -265,7 +271,8 @@ class SearchService(BaseService[Entry]):
             .group_by(col(Entry.ent_seq))
             .having(priority_score > 0)  # Only entries with matches
             .order_by(priority_score.desc(), word_length.asc())
-            .limit(request.limit * 2)  # Get extra for deduplication
+            .limit(request.limit * 2)
+            .offset((request.page - 1) * request.limit)  # Get extra for deduplication
         )
 
         # If not including rare words, filter by common
@@ -368,7 +375,7 @@ class SearchService(BaseService[Entry]):
             tags=tags,
             variants=variants,
         )
-    
+
     def get_suggestions(self, request: SearchRequest) -> SearchSuggestionResponse:
         """
         Get search suggestions based on partial query.

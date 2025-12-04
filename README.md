@@ -1,1091 +1,1238 @@
 # SUCA API
 
-A modern Japanese dictionary API with flashcard management, built with FastAPI. Features intelligent search, JWT authentication, and comprehensive language learning tools.
+FastAPI-based Japanese dictionary and flashcard management system with intelligent bilingual search, JWT authentication, and optimized PostgreSQL database.
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.118-009688.svg)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)
-[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Development Setup](#development-setup)
+- [Docker Deployment](#docker-deployment)
+- [API Reference](#api-reference)
+- [Database Management](#database-management)
+- [Testing](#testing)
+- [Performance Optimization](#performance-optimization)
+- [CI/CD Pipeline](#cicd-pipeline)
 
 ---
 
-## 🚀 Features
+## Quick Start
 
-### Core Functionality
-- ✅ **Intelligent Dictionary Search** - Prioritized search with exact matches, common words, and partial matches
-- 🗂️ **Flashcard Management** - Create decks and cards for language learning with user isolation
-- 🔐 **JWT Authentication** - Secure token-based authentication with rate limiting
-- 💾 **PostgreSQL Database** - Reliable data persistence with Alembic migrations
-- 🏥 **Health Monitoring** - Comprehensive health checks with database status
-
-### Technical Features
-- 🎯 **Type Safety** - Full type hints with Pydantic models and SQLModel
-- 🧪 **Comprehensive Testing** - Test coverage with pytest fixtures and authenticated clients
-- 📝 **Structured Logging** - Detailed logging for debugging and monitoring
-- 🛡️ **Error Handling** - Structured error responses with proper HTTP status codes
-- 🌐 **CORS Support** - Configured for frontend integration
-- 📊 **API Documentation** - Auto-generated Swagger UI and ReDoc
-
----
-
-## 📋 Table of Contents
-
-- [Features](#-features)
-- [Quick Start](#-quick-start)
-- [Project Structure](#-project-structure)
-- [Installation](#️-installation)
-- [Configuration](#-configuration)
-- [Running the Application](#-running-the-application)
-- [Authentication](#-authentication)
-- [API Endpoints](#-api-endpoints)
-- [Testing](#-testing)
-- [Database Operations](#️-database-operations)
-- [Development](#-development)
-- [CI/CD](#-cicd)
-- [Deployment](#-deployment)
-- [Architecture](#️-architecture)
-- [Contributing](#-contributing)
-
----
-
-## ⚡ Quick Start
+### Docker (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/SUCA-api.git
+git clone https://github.com/SUCA-Team/SUCA-api.git
 cd SUCA-api
+make docker-dev  # Builds, migrates, and starts all services
 
-# Install dependencies
+# Import dictionary data (REQUIRED)
+make docker-db-restore FILE=dump.sql
+```
+
+**Access:**
+- API Documentation: http://localhost:8000/docs
+- Database: localhost:5433 (suca/suca)
+- Health Check: http://localhost:8000/api/v1/health
+
+**⚠️ Important:** The `dump.sql` file contains the JMdict Japanese dictionary data and is **required** for search functionality. Place it in the project root directory before running the import command.
+
+### Local Development
+
+```bash
 poetry install
-
-# Set up environment
 cp .env.example .env
-# Edit .env with your database credentials
-
-# Run database migrations
+# Edit .env with database credentials
 poetry run alembic upgrade head
 
-# Start the server
-poetry run uvicorn src.suca.main:app --reload
+# Import dictionary data (REQUIRED)
+psql -U postgres -d jmdict < dump.sql
 
-# Open your browser
-# Swagger UI: http://localhost:8000/docs
-# ReDoc: http://localhost:8000/redoc
-```
-
----
-
-## 📁 Project Structure
-
-```
-SUCA-api/
-├── src/suca/
-│   ├── api/                    # API layer
-│   │   ├── deps.py            # Dependency injection
-│   │   └── v1/                # API version 1
-│   │       ├── router.py      # Main API router
-│   │       └── endpoints/     # API endpoints
-│   │           ├── auth.py    # Authentication endpoints
-│   │           ├── flashcard.py # Flashcard CRUD
-│   │           ├── health.py  # Health checks
-│   │           └── search.py  # Dictionary search
-│   ├── core/                  # Core configuration
-│   │   ├── auth.py           # JWT authentication logic
-│   │   ├── config.py         # Application settings
-│   │   ├── exceptions.py     # Custom exceptions
-│   │   ├── middleware.py     # Exception handlers
-│   │   └── validators.py     # Environment validation
-│   ├── db/                   # Database layer
-│   │   ├── base.py          # Base model classes
-│   │   ├── db.py            # Database configuration
-│   │   └── model.py         # SQLModel definitions
-│   ├── schemas/             # Pydantic schemas
-│   │   ├── base.py         # Base response models
-│   │   ├── flashcard_schemas.py # Flashcard schemas
-│   │   ├── health.py       # Health check schemas
-│   │   └── search.py       # Search schemas
-│   ├── services/           # Business logic layer
-│   │   ├── base.py        # Base service class
-│   │   ├── flashcard_service.py # Flashcard operations
-│   │   └── search_service.py    # Search operations
-│   ├── utils/             # Utility functions
-│   │   ├── logging.py    # Logging utilities
-│   │   └── text.py       # Text processing
-│   └── main.py           # FastAPI application
-├── tests/                # Test suite
-│   ├── conftest.py      # Test fixtures
-│   ├── test_auth.py     # Authentication tests
-│   ├── test_flashcard.py # Flashcard tests
-│   ├── test_health.py   # Health check tests
-│   └── test_search.py   # Search tests
-├── alembic/             # Database migrations
-├── scripts/             # Utility scripts
-├── .env.example         # Environment template
-├── pyproject.toml       # Dependencies
-├── Makefile            # Development commands
-└── README.md           # This file
-```
-
----
-
-## 🛠️ Installation
-
-### Prerequisites
-
-- **Python 3.13+** - [Download](https://www.python.org/downloads/)
-- **PostgreSQL 16+** - [Download](https://www.postgresql.org/download/)
-- **Poetry** - [Install](https://python-poetry.org/docs/#installation)
-
-### Step 1: Clone Repository
-
-```bash
-git clone https://github.com/yourusername/SUCA-api.git
-cd SUCA-api
-```
-
-### Step 2: Install Dependencies
-
-```bash
-# Install all dependencies
-poetry install
-
-# Or install only production dependencies
-poetry install --only=main
-```
-
-### Step 3: Set Up Database
-
-```bash
-# Create PostgreSQL database
-createdb jmdict
-
-# Or using psql
-psql -U postgres -c "CREATE DATABASE jmdict;"
-```
-
-### Step 4: Configure Environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your settings:
-
-```bash
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASS=your_password
-DB_NAME=jmdict
-
-# Application
-DEBUG=true
-API_TITLE=SUCA API
-API_VERSION=1.0.0
-
-# JWT Authentication
-JWT_SECRET_KEY=your-secret-key-generate-with-openssl-rand-hex-32
-```
-
-### Step 5: Run Migrations
-
-```bash
-poetry run alembic upgrade head
-```
-
----
-
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DB_HOST` | PostgreSQL host | `localhost` | Yes |
-| `DB_PORT` | PostgreSQL port | `5432` | Yes |
-| `DB_USER` | Database user | `postgres` | Yes |
-| `DB_PASS` | Database password | - | Yes |
-| `DB_NAME` | Database name | `jmdict` | Yes |
-| `JWT_SECRET_KEY` | Secret key for JWT | - | Yes (Production) |
-| `DEBUG` | Enable debug mode | `false` | No |
-| `API_TITLE` | API title | `SUCA API` | No |
-| `API_VERSION` | API version | `1.0.0` | No |
-
-### Generate JWT Secret Key
-
-```bash
-# Generate a secure random key
-openssl rand -hex 32
-```
-
----
-
-## 🚦 Running the Application
-
-### Development Mode
-
-```bash
-# Using Poetry
-poetry run uvicorn src.suca.main:app --reload
-
-# Using Make
 make run
 ```
 
-Server will start at: **http://localhost:8000**
-
-### Production Mode
-
-```bash
-# Without auto-reload
-poetry run uvicorn src.suca.main:app --host 0.0.0.0 --port 8000 --workers 4
-
-# Using Make
-make run-prod
-```
-
-### Access API Documentation
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Health Check**: http://localhost:8000/api/v1/health
+**⚠️ Important:** The `dump.sql` file contains the JMdict Japanese dictionary data and is **required** for search functionality.
 
 ---
 
-## 🔐 Authentication
+## Architecture
 
-The API uses **JWT (JSON Web Tokens)** for authentication.
+### Stack
 
-### Quick Start with Authentication
+- **Framework**: FastAPI 0.118 (async ASGI)
+- **ORM**: SQLModel (SQLAlchemy 2.0 + Pydantic)
+- **Database**: PostgreSQL 16
+- **Authentication**: JWT with bcrypt password hashing
+- **Testing**: pytest with async support
+- **Code Quality**: ruff (linting + formatting), mypy (type checking)
+- **Containerization**: Docker + Docker Compose
 
-#### 1. Register a New User
+### Project Structure
 
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "myuser",
-    "email": "user@example.com",
-    "password": "securepassword123"
-  }'
+```
+src/suca/
+├── api/v1/endpoints/     # HTTP request handlers
+│   ├── auth.py           # JWT authentication (register, login, me)
+│   ├── flashcard.py      # CRUD for decks and cards
+│   ├── search.py         # Bilingual dictionary search
+│   └── health.py         # Health check endpoint
+├── core/                 # Configuration and middleware
+│   ├── config.py         # Pydantic settings management
+│   ├── auth.py           # JWT token creation/validation
+│   ├── exceptions.py     # Custom exception classes
+│   └── middleware.py     # Exception handlers and CORS
+├── db/                   # Database layer
+│   ├── db.py             # Engine creation with lazy initialization
+│   ├── model.py          # SQLModel table definitions
+│   └── base.py           # Base model with timestamps
+├── services/             # Business logic layer
+│   ├── search_service.py # Search algorithms and query optimization
+│   └── flashcard_service.py # Flashcard CRUD operations
+├── schemas/              # Pydantic request/response models
+└── main.py               # FastAPI application factory
 ```
 
-**Response:**
-```json
+### Design Patterns
+
+**Layered Architecture:**
+```
+API Layer (FastAPI routes)
+    ↓
+Service Layer (Business logic)
+    ↓
+Database Layer (SQLModel/SQLAlchemy)
+```
+
+**Dependency Injection:**
+```python
+# Database session injection
+def get_session() -> Generator[Session, None, None]:
+    with Session(get_engine()) as session:
+        yield session
+
+# Service injection
+@router.get("/search")
+def search(session: Session = Depends(get_session)):
+    service = SearchService(session)
+    return service.search_entries(...)
+```
+
+**Lazy Initialization Pattern:**
+```python
+# src/suca/db/db.py
+_engine: Engine | None = None
+
+def get_engine() -> Engine:
+    global _engine
+    if _engine is None:
+        _engine = create_database_engine(settings.database_url)
+    return _engine
+```
+
+Benefits:
+- Single database connection pool across application
+- Test isolation via `set_engine()` override
+- No environment variable flags needed
+
+---
+
+## Development Setup
+
+### Prerequisites
+
+- Python 3.11+ (3.13 recommended)
+- PostgreSQL 16+
+- Poetry 2.2+
+
+### Installation
+
+```bash
+# 1. Install dependencies
+poetry install
+
+# 2. Configure environment
+cp .env.example .env
+```
+
+**Required `.env` variables:**
+```bash
+# Database (PostgreSQL)
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASS=postgres
+DB_NAME=jmdict
+
+# JWT Authentication
+JWT_SECRET_KEY=$(openssl rand -hex 32)  # Generate secure key
+
+# Optional
+DEBUG=true                              # Enable debug mode
+SQLALCHEMY_ECHO=false                   # Log SQL queries
+```
+
+```bash
+# 3. Create database
+createdb jmdict
+
+# 4. Run migrations
+poetry run alembic upgrade head
+
+# 5. Import dictionary data (REQUIRED)
+psql -U postgres -d jmdict < dump.sql
+# This imports the JMdict Japanese-English dictionary data
+
+# 6. (Optional) Load sample flashcard data
+poetry run python scripts/create_sample_data.py
+```
+
+### Dictionary Data (dump.sql)
+
+**⚠️ REQUIRED:** The application requires Japanese dictionary data to function.
+
+**What is dump.sql?**
+- Contains JMdict Japanese-English dictionary entries
+- Includes ~180,000+ dictionary entries with kanji, readings, and definitions
+- Pre-populated tables: `entry`, `kanji`, `reading`, `sense`, `gloss`, `example`
+
+**Obtaining the data:**
+
+1. **From project maintainers** (recommended):
+   ```bash
+   # Contact the SUCA team for the dump.sql file
+   # Place it in the project root directory
+   ```
+
+2. **Generate from JMdict XML** (advanced):
+   ```bash
+   # Download JMdict from: http://www.edrdg.org/jmdict/j_jmdict.html
+   # Parse using provided script
+   poetry run python scripts/parse_jmdict.py
+   # Export to SQL
+   pg_dump -U postgres -d jmdict > dump.sql
+   ```
+
+**Import instructions:**
+
+**Local PostgreSQL:**
+```bash
+# Import to local database
+psql -U postgres -d jmdict < dump.sql
+
+# Verify import
+psql -U postgres -d jmdict -c "SELECT COUNT(*) FROM entry;"
+# Expected output: ~180,000+ entries
+```
+
+**Docker:**
+```bash
+# Import to Docker database
+make docker-db-restore FILE=dump.sql
+# or
+cat dump.sql | docker-compose exec -T db psql -U suca -d jmdict
+
+# Verify import
+make docker-db-shell
+# Then: SELECT COUNT(*) FROM entry;
+```
+
+**File location:**
+```
+SUCA-api/
+├── dump.sql          ← Place dictionary data here
+├── src/
+├── tests/
+└── ...
+```
+
+**Without dictionary data:**
+- ❌ Search endpoints will return empty results
+- ❌ `/api/v1/search` will not find any words
+- ✅ Authentication and flashcard features still work
+
+### Running the Application
+
+**Development (auto-reload):**
+```bash
+make run
+# or
+poetry run uvicorn src.suca.main:app --reload --port 8000
+```
+
+**Production:**
+```bash
+make run-prod
+# or
+poetry run uvicorn src.suca.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Available Make Commands
+
+```bash
+# Development
+make run                # Development server with hot-reload
+make run-prod           # Production server (multi-worker)
+make shell              # Open poetry shell
+
+# Code Quality
+make lint               # Check code style with ruff
+make lint-fix           # Auto-fix linting issues
+make format             # Format code with ruff
+make type-check         # Run mypy type checking
+make all-checks         # Run all quality checks + tests
+
+# Testing
+make test               # Run all tests
+make test-cov           # Run tests with coverage report
+make test-file FILE=tests/test_auth.py  # Run specific test file
+
+# Database
+make migrate MSG="description"  # Create new migration
+make db-upgrade         # Apply migrations
+make db-downgrade       # Rollback one migration
+make db-reset           # Reset database (WARNING: destroys data)
+make db-history         # Show migration history
+
+# Cleanup
+make clean              # Remove cache files
+make clean-all          # Deep clean including Poetry cache
+```
+
+---
+
+## Docker Deployment
+
+### Architecture
+
+```
+┌─────────────────┐      ┌──────────────────┐
+│  API Container  │─────▶│  PostgreSQL 16   │
+│  (FastAPI)      │      │  (postgres_data) │
+└─────────────────┘      └──────────────────┘
+        │
+        │ (optional)
+        ▼
+┌─────────────────┐
+│    pgAdmin 4    │
+│  (DB Management)│
+└─────────────────┘
+```
+
+### Docker Compose Services
+
+**Development (`docker-compose.yml`):**
+- `db` - PostgreSQL 16 with persistent volume
+- `api` - FastAPI app with hot-reload (source mounted)
+- `pgadmin` - Database GUI (profile: `tools`)
+
+**Production (`docker-compose.prod.yml`):**
+- Optimized multi-stage builds
+- No volume mounts (baked-in code)
+- Health checks configured
+- Resource limits defined
+
+### Essential Commands
+
+```bash
+# Development
+make docker-dev         # Build + migrate + start (one command)
+make docker-up          # Start services
+make docker-down        # Stop services
+make docker-logs        # Tail all logs
+make docker-logs-api    # API logs only
+make docker-shell       # Shell into API container
+make docker-python      # Python REPL in container
+
+# Database
+make docker-migrate     # Run migrations in Docker
+make docker-migrate-create MSG="add indexes"  # Create migration
+make docker-db-shell    # PostgreSQL shell (psql)
+make docker-db-backup   # Export database to SQL file
+make docker-db-restore FILE=dump.sql  # Import SQL file
+
+# Testing in Docker
+make docker-test        # Run pytest in container
+make docker-test-cov    # Generate coverage report
+make docker-lint        # Run ruff checks
+make docker-format      # Format code
+
+# Production
+make docker-prod-up     # Start production stack
+make docker-prod-build  # Build production images
+make docker-prod-logs   # View production logs
+
+# Maintenance
+make docker-rebuild     # Rebuild from scratch (no cache)
+make docker-clean       # Remove stopped containers
+make docker-clean-all   # Nuclear option (removes everything)
+```
+
+### Environment Configuration
+
+**`.env` for Docker:**
+```bash
+# Database (Docker service name)
+DB_HOST=db              # Container hostname
+DB_PORT=5433            # External port (mapped from internal 5432)
+DB_USER=suca
+DB_PASS=suca
+DB_NAME=jmdict
+
+# Application
+ENV=dev
+DEBUG=true
+JWT_SECRET_KEY=<generate-with-openssl-rand-hex-32>
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# Performance
+SQLALCHEMY_ECHO=false   # Set true to debug SQL queries
+```
+
+### Volume Mounts (Development)
+
+```yaml
+# docker-compose.yml
+volumes:
+  - ./src:/app/src              # Hot-reload source code
+  - ./tests:/app/tests          # Test files
+  - ./scripts:/app/scripts      # Utility scripts
+  - ./alembic:/app/alembic      # Migrations
+  - postgres_data:/var/lib/postgresql/data  # Persistent database
+```
+
+### Dockerfile Architecture
+
+**Development (`Dockerfile.dev`):**
+```dockerfile
+FROM python:3.13-slim
+RUN pip install poetry==2.2.1
+WORKDIR /app
+COPY pyproject.toml poetry.lock ./
+RUN poetry install  # Includes dev dependencies
+COPY . .
+CMD ["poetry", "run", "uvicorn", "src.suca.main:app", "--reload", "--host", "0.0.0.0"]
+```
+
+**Production (`Dockerfile`):**
+```dockerfile
+# Multi-stage build
+FROM python:3.13-slim AS builder
+RUN pip install poetry
+COPY pyproject.toml poetry.lock ./
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+FROM python:3.13-slim
+COPY --from=builder requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . /app
+WORKDIR /app
+USER nobody
+CMD ["uvicorn", "src.suca.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Data Import/Export
+
+**Import dictionary data (REQUIRED for search functionality):**
+```bash
+# Docker import
+make docker-db-restore FILE=dump.sql
+
+# Verify import
+make docker-db-shell
+# Then in psql: SELECT COUNT(*) FROM entry;
+# Expected: ~180,000+ entries
+```
+
+**Export from local PostgreSQL:**
+```bash
+pg_dump -U postgres -h localhost -p 5432 -d suca --no-owner --no-acl > dump.sql
+```
+
+**Import to Docker:**
+```bash
+cat dump.sql | docker-compose exec -T db psql -U suca -d jmdict
+# or
+make docker-db-restore FILE=dump.sql
+```
+
+**Backup Docker database:**
+```bash
+make docker-db-backup
+# Creates: backup_YYYYMMDD_HHMMSS.sql
+```
+
+**⚠️ Note:** The `dump.sql` file containing JMdict dictionary data must be placed in the project root directory. Without this data, search endpoints will return empty results.
+
+### Troubleshooting
+
+**Port conflict (5432 in use):**
+```bash
+# .env already configured for 5433
+DB_PORT=5433
+```
+
+**Migrations out of sync:**
+```bash
+# Mark database as up-to-date with current schema
+docker-compose exec api poetry run alembic stamp head
+
+# Then create new migration
+make docker-migrate-create MSG="your changes"
+```
+
+**Fresh start:**
+```bash
+make docker-fresh  # Stops, removes volumes, rebuilds, migrates
+```
+
+**View container resource usage:**
+```bash
+docker stats
+# or
+make docker-stats
+```
+
+---
+
+## API Reference
+
+### Authentication
+
+All flashcard endpoints require JWT authentication. Health and search endpoints are public.
+
+**Register User:**
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "SecurePass123"
+}
+
+Response: 201 Created
+{
+  "access_token": "eyJhbGci...",
   "token_type": "bearer",
   "expires_in": 1800
 }
 ```
 
-#### 2. Login (Get Token)
-
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "demo_user",
-    "password": "password123"
-  }'
-```
-
-#### 3. Use Token in Requests
-
-```bash
-# Get current user info
-curl -X GET http://localhost:8000/api/v1/auth/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-
-# Create a flashcard deck
-curl -X POST http://localhost:8000/api/v1/flashcard/decks \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Japanese N5 Vocabulary"}'
-```
-
-### Demo Credentials
-
-For testing, use these credentials:
-- **Username**: `demo_user`
-- **Password**: `password123`
-
-### Using Swagger UI
-
-1. Open http://localhost:8000/docs
-2. Click `POST /api/v1/auth/login`
-3. Click "Try it out"
-4. Enter credentials and execute
-5. Copy the `access_token` from response
-6. Click the **"Authorize" 🔓** button (top right)
-7. Paste token and click "Authorize"
-8. Now you can test all protected endpoints! ✅
-
-### Security Features
-
-- ✅ **Password Hashing** - Bcrypt/Argon2 for secure storage
-- ✅ **Rate Limiting** - Prevents brute-force attacks
-  - Login: 5 attempts/minute
-  - Register: 5 attempts/hour
-- ✅ **Token Expiration** - Tokens expire after 30 minutes
-- ✅ **User Isolation** - Users only see their own data
-- ✅ **Validation** - Username (3-50 chars), Password (8-128 chars)
-
----
-
-## 📡 API Endpoints
-
-### Authentication (`/api/v1/auth`)
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `POST` | `/register` | Register new user | No |
-| `POST` | `/login` | Login and get JWT token | No |
-| `GET` | `/me` | Get current user info | Yes |
-
-**Example: Register**
-```bash
-POST /api/v1/auth/register
-{
-  "username": "newuser",
-  "email": "new@example.com",
-  "password": "mypassword123"
-}
-```
-
-**Example: Login**
-```bash
+**Login:**
+```http
 POST /api/v1/auth/login
+Content-Type: application/json
+
 {
-  "username": "demo_user",
-  "password": "password123"
+  "username": "testuser",
+  "password": "SecurePass123"
+}
+
+Response: 200 OK
+{
+  "access_token": "eyJhbGci...",
+  "token_type": "bearer",
+  "expires_in": 1800
 }
 ```
 
----
+**Get Current User:**
+```http
+GET /api/v1/auth/me
+Authorization: Bearer <token>
 
-### Flashcard Management (`/api/v1/flashcard`)
-
-All flashcard endpoints **require authentication**.
-
-#### Deck Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/decks` | List all user's decks |
-| `POST` | `/decks` | Create new deck |
-| `GET` | `/decks/{deck_id}` | Get specific deck |
-| `PUT` | `/decks/{deck_id}` | Update deck |
-| `DELETE` | `/decks/{deck_id}` | Delete deck |
-
-**Example: Create Deck**
-```bash
-POST /api/v1/flashcard/decks
-Headers: Authorization: Bearer <token>
+Response: 200 OK
 {
-  "name": "Japanese N5 Vocabulary"
+  "username": "testuser",
+  "email": "test@example.com"
 }
 ```
 
-**Example: List Decks**
-```bash
-GET /api/v1/flashcard/decks
-Headers: Authorization: Bearer <token>
+### Dictionary Search
 
-Response:
-{
-  "decks": [
-    {
-      "id": 1,
-      "user_id": "demo_user",
-      "name": "Japanese N5 Vocabulary",
-      "flashcard_count": 10,
-      "created_at": "2025-12-02T10:00:00",
-      "updated_at": "2025-12-02T10:00:00"
-    }
-  ],
-  "total_count": 1,
-  "success": true
-}
-```
+Intelligent bilingual search with auto-language detection.
 
-#### Card Endpoints
+**Search (Japanese or English):**
+```http
+GET /api/v1/search?q=食べる&limit=10&include_rare=false
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/decks/{deck_id}/cards` | List all cards in deck |
-| `POST` | `/decks/{deck_id}/cards` | Add card to deck |
-| `GET` | `/decks/{deck_id}/cards/{card_id}` | Get specific card |
-| `PUT` | `/decks/{deck_id}/cards/{card_id}` | Update card |
-| `DELETE` | `/decks/{deck_id}/cards/{card_id}` | Delete card |
-
-**Example: Add Card**
-```bash
-POST /api/v1/flashcard/decks/1/cards
-Headers: Authorization: Bearer <token>
-{
-  "front": "行く",
-  "back": "to go"
-}
-```
-
-**Example: Update Card**
-```bash
-PUT /api/v1/flashcard/decks/1/cards/5
-Headers: Authorization: Bearer <token>
-{
-  "back": "to go (verb)"
-}
-```
-
----
-
-### Dictionary Search (`/api/v1/search`)
-
-Search Japanese dictionary entries. **No authentication required**.
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/search` | Search dictionary entries |
-
-**Query Parameters:**
-- `q` (required) - Search query
-- `limit` (optional) - Max results (default: 10, max: 100)
-- `include_rare` (optional) - Include rare words (default: false)
-
-**Example: Search**
-```bash
-GET /api/v1/search?q=行く&limit=5
-
-Response:
+Response: 200 OK
 {
   "results": [
     {
-      "word": "行く",
-      "reading": "いく",
+      "word": "食べる",
+      "reading": "たべる",
       "is_common": true,
       "jlpt_level": "N5",
       "meanings": [
         {
-          "pos": ["verb"],
-          "definitions": ["to go", "to move"],
+          "pos": ["Ichidan verb", "transitive verb"],
+          "definitions": ["to eat"],
           "examples": [],
           "notes": []
         }
       ],
-      "other_forms": ["行く"],
+      "other_forms": ["喰べる"],
       "tags": ["common word"],
       "variants": [
-        {"kanji": "行く", "reading": "いく"}
+        {"kanji": "食べる", "reading": "たべる"}
       ]
     }
   ],
   "total_count": 1,
-  "query": "行く",
-  "success": true
+  "query": "食べる",
+  "message": "Found 1 results for '食べる' (Japanese search)"
 }
 ```
 
+**Query Parameters:**
+- `q` (required) - Search term (auto-detects Japanese/English)
+- `limit` (optional, default: 10, max: 100) - Results per page
+- `include_rare` (optional, default: false) - Include uncommon words
+- `page` (optional, default: 1) - Page number
+
+**Language Detection:**
+- ASCII characters → English search (searches glosses)
+- Japanese characters → Japanese search (searches kanji/readings)
+
 **Search Prioritization:**
-1. **Exact matches** - Query exactly matches word (行 = 行)
-2. **Common words starting with query** - 行 → 行く, 行き
-3. **Common words containing query** - 行 → 銀行, 旅行
-4. **Other partial matches** - All other results
 
----
+Two-dimensional ranking system:
+1. Common words always ranked above rare words (+10,000 priority)
+2. Within each group, ranked by match type:
 
-### Health Check (`/api/v1/health`)
+| Match Type | Common Score | Rare Score |
+|------------|--------------|------------|
+| Exact match | 11,000 | 1,000 |
+| Starts with | 10,500 | 500 |
+| Contains (word boundary) | 10,300 | 300 |
+| Contains (anywhere) | 10,100 | 100 |
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/health` | Application health status | No |
+**Search Suggestions:**
+```http
+GET /api/v1/suggestions?q=食&limit=10
 
-**Example:**
-```bash
+Response: 200 OK
+{
+  "suggestions": ["食べる", "食事", "食物", "食料品", ...]
+}
+```
+
+### Flashcard Management
+
+**List Decks:**
+```http
+GET /api/v1/flashcard/decks
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "decks": [
+    {
+      "id": 1,
+      "user_id": "testuser",
+      "name": "JLPT N5 Vocabulary",
+      "flashcard_count": 25,
+      "created_at": "2025-12-04T10:00:00Z",
+      "updated_at": "2025-12-04T10:00:00Z"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+**Create Deck:**
+```http
+POST /api/v1/flashcard/decks
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "JLPT N5 Vocabulary"
+}
+
+Response: 201 Created
+{
+  "id": 1,
+  "user_id": "testuser",
+  "name": "JLPT N5 Vocabulary",
+  "flashcard_count": 0,
+  "created_at": "2025-12-04T10:00:00Z",
+  "updated_at": "2025-12-04T10:00:00Z"
+}
+```
+
+**Add Card to Deck:**
+```http
+POST /api/v1/flashcard/decks/1/cards
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "front": "食べる",
+  "back": "to eat"
+}
+
+Response: 201 Created
+{
+  "id": 1,
+  "deck_id": 1,
+  "user_id": "testuser",
+  "front": "食べる",
+  "back": "to eat",
+  "created_at": "2025-12-04T10:05:00Z",
+  "updated_at": "2025-12-04T10:05:00Z"
+}
+```
+
+**Update Card:**
+```http
+PUT /api/v1/flashcard/decks/1/cards/1
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "back": "to eat; to consume"
+}
+
+Response: 200 OK
+{...}
+```
+
+**Delete Card:**
+```http
+DELETE /api/v1/flashcard/decks/1/cards/1
+Authorization: Bearer <token>
+
+Response: 204 No Content
+```
+
+### Health Check
+
+```http
 GET /api/v1/health
 
-Response:
+Response: 200 OK
 {
+  "success": true,
+  "message": "API is healthy",
   "data": {
     "status": "healthy",
-    "timestamp": "2025-12-02T15:30:00",
+    "timestamp": "2025-12-04T12:00:00Z",
     "version": "1.0.0",
     "database_status": "healthy",
     "uptime": 3600.5
-  },
-  "success": true,
-  "message": "API is healthy"
+  }
 }
 ```
 
 ---
 
-## 🧪 Testing
+## Database Management
 
-### Run All Tests
+### Schema Overview
 
+**Dictionary Tables:**
+- `entry` - Main dictionary entries (ent_seq PK, is_common, jlpt_level)
+- `kanji` - Kanji forms (keb, entry_id FK)
+- `reading` - Readings (reb, entry_id FK)
+- `sense` - Word senses/meanings (entry_id FK)
+- `gloss` - Definitions (text, lang, sense_id FK)
+- `example` - Usage examples (text, sense_id FK)
+
+**Flashcard Tables:**
+- `flashcard_decks` - User decks (user_id, name)
+- `flashcards` - Cards (deck_id FK, user_id, front, back)
+
+### Migrations with Alembic
+
+**Create migration from model changes:**
 ```bash
-# Run all tests
-poetry run pytest
+# Auto-generate migration
+make migrate MSG="add user table"
+# or
+poetry run alembic revision --autogenerate -m "add user table"
 
-# Run with verbose output
-poetry run pytest -v
-
-# Run specific test file
-poetry run pytest tests/test_auth.py
-
-# Run specific test
-poetry run pytest tests/test_auth.py::test_login_success
+# Review generated file in alembic/versions/
+# Edit if needed, then apply:
+make db-upgrade
 ```
 
-### Test Coverage
-
+**Create empty migration for custom SQL:**
 ```bash
-# Run tests with coverage
-poetry run pytest --cov=src/suca
-
-# Generate HTML coverage report
-poetry run pytest --cov=src/suca --cov-report=html
-
-# View report
-open htmlcov/index.html  # macOS
-start htmlcov/index.html # Windows
+poetry run alembic revision -m "add custom indexes"
+# Edit generated file to add custom SQL
+make db-upgrade
 ```
 
-### Test Structure
+**Common operations:**
+```bash
+make db-upgrade      # Apply all pending migrations
+make db-downgrade    # Rollback one migration
+make db-history      # View migration history
+make db-current      # Show current version
+make db-reset        # Downgrade to base, then upgrade to head (DANGER)
+```
+
+**Docker migrations:**
+```bash
+make docker-migrate                      # Apply migrations in container
+make docker-migrate-create MSG="..."     # Create migration in container
+docker-compose exec api poetry run alembic history  # View history
+```
+
+### Performance Indexes
+
+Optimized indexes for fast search queries:
+
+**Entry table:**
+- `ix_entry_is_common` (is_common) - Filter common/rare
+- `ix_entry_jlpt_level` (jlpt_level) - JLPT filtering
+
+**Kanji table:**
+- `ix_kanji_keb` (keb) - Japanese text search with LIKE
+- `ix_kanji_entry_id` (entry_id) - JOIN optimization
+
+**Reading table:**
+- `ix_reading_reb` (reb) - Hiragana/katakana search
+- `ix_reading_entry_id` (entry_id) - JOIN optimization
+
+**Gloss table:**
+- `ix_gloss_text` (text) - English definition search
+- `ix_gloss_lang` (lang) - Language filtering
+- `ix_gloss_sense_id` (sense_id) - JOIN optimization
+
+**Other indexes:**
+- `ix_sense_entry_id`, `ix_example_sense_id`
+- `ix_flashcard_decks_user_id`, `ix_flashcards_deck_id`, `ix_flashcards_user_id`
+
+**Verify indexes:**
+```sql
+-- Via psql
+\d kanji
+
+-- Or via Docker
+docker-compose exec db psql -U suca -d jmdict -c "\d kanji"
+```
+
+**Index performance impact:**
+- 10-100x faster LIKE queries on indexed columns
+- Efficient JOINs across tables
+- Optimized sorting by word length and priority
+
+---
+
+## Testing
+
+### Test Architecture
 
 ```
 tests/
-├── conftest.py          # Shared fixtures
-│   ├── session          # Database session
-│   ├── client          # Test client (unauthenticated)
-│   ├── auth_headers    # JWT token headers
-│   └── auth_client     # Authenticated test client
-├── test_auth.py        # Authentication tests
-├── test_flashcard.py   # Flashcard CRUD tests
-├── test_health.py      # Health check tests
-└── test_search.py      # Search functionality tests
+├── conftest.py           # Fixtures (session, client, auth)
+├── test_auth.py          # JWT authentication tests
+├── test_flashcard.py     # Flashcard CRUD tests
+├── test_health.py        # Health endpoint tests
+└── test_search.py        # Search functionality tests
 ```
 
-### Using Test Fixtures
+### Key Fixtures
 
+**`session`** - SQLite in-memory database:
+```python
+@pytest.fixture
+def session() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite:///:memory:")
+    set_engine(engine)  # Override global engine
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session
+```
+
+**`client`** - Unauthenticated test client:
+```python
+@pytest.fixture
+def client(session: Session) -> TestClient:
+    def override_get_session():
+        yield session
+    app.dependency_overrides[get_session] = override_get_session
+    return TestClient(app)
+```
+
+**`auth_client`** - Authenticated test client:
+```python
+@pytest.fixture
+def auth_client(client: TestClient, auth_headers: dict) -> TestClient:
+    client.headers.update(auth_headers)
+    return client
+```
+
+### Running Tests
+
+```bash
+# All tests
+make test
+poetry run pytest
+
+# With coverage
+make test-cov
+poetry run pytest --cov=src/suca --cov-report=html
+
+# Specific file
+make test-file FILE=tests/test_auth.py
+poetry run pytest tests/test_auth.py -v
+
+# Specific test
+poetry run pytest tests/test_auth.py::test_login_success -v
+
+# Watch mode (requires pytest-watch)
+poetry run ptw
+
+# In Docker
+make docker-test
+make docker-test-cov
+```
+
+### Test Examples
+
+**Testing authenticated endpoints:**
 ```python
 def test_create_deck(auth_client: TestClient):
-    """Test creating a deck with authentication."""
     response = auth_client.post(
         "/api/v1/flashcard/decks",
         json={"name": "Test Deck"}
     )
     assert response.status_code == 201
+    assert response.json()["name"] == "Test Deck"
+```
+
+**Testing search functionality:**
+```python
+def test_search_japanese(client: TestClient):
+    response = client.get("/api/v1/search?q=行く")
+    assert response.status_code == 200
+    assert response.json()["total_count"] > 0
+```
+
+### Coverage Requirements
+
+- Maintain >80% code coverage
+- All new features must include tests
+- Tests should be isolated and deterministic
+
+---
+
+## Performance Optimization
+
+### Database Query Optimization
+
+**1. Indexed Columns**
+
+All search columns have B-tree indexes:
+```sql
+CREATE INDEX ix_kanji_keb ON kanji(keb);
+CREATE INDEX ix_gloss_text ON gloss(text);
+CREATE INDEX ix_entry_is_common ON entry(is_common);
+```
+
+**2. Efficient JOIN Strategy**
+
+```python
+# Bad: N+1 queries
+for entry in entries:
+    kanjis = session.query(Kanji).filter_by(entry_id=entry.id).all()
+
+# Good: Single query with JOIN
+stmt = (
+    select(Entry, Kanji)
+    .join(Kanji, Entry.ent_seq == Kanji.entry_id)
+    .where(Kanji.keb.like("%食%"))
+)
+```
+
+**3. Query Result Limiting**
+
+```python
+# Limit results early in database
+stmt = stmt.limit(request.limit * 2)  # Get extras for deduplication
+
+# Deduplicate in Python (faster than DISTINCT in DB for complex queries)
+seen = set()
+unique_ids = [id for id, _, _ in results if id not in seen and not seen.add(id)]
+```
+
+**4. Lazy Loading vs Eager Loading**
+
+```python
+# SQLModel relationships are lazy by default
+entry.kanjis  # Triggers separate query
+
+# For bulk operations, prefetch relationships:
+stmt = select(Entry).options(joinedload(Entry.kanjis))
+```
+
+### Application Performance
+
+**Connection Pooling:**
+```python
+# src/suca/db/db.py
+engine = create_engine(
+    database_url,
+    poolclass=QueuePool,
+    pool_size=5,          # Max connections
+    max_overflow=10,      # Burst capacity
+    pool_pre_ping=True,   # Verify connections before use
+)
+```
+
+**Async Considerations:**
+- FastAPI endpoints are async-compatible
+- Database operations use sync SQLAlchemy (via SQLModel)
+- For high concurrency, consider:
+  - `asyncpg` + SQLAlchemy async engine
+  - Connection pool tuning
+  - Read replicas for search queries
+
+**Caching Strategy:**
+```python
+# Future enhancement: Add Redis for search result caching
+@cache(ttl=3600)
+def search_entries(query: str):
+    # Expensive database query
+    pass
+```
+
+### Benchmarking
+
+**Query performance:**
+```sql
+-- Enable query timing
+\timing
+
+-- Analyze query plan
+EXPLAIN ANALYZE
+SELECT * FROM entry
+JOIN kanji ON entry.ent_seq = kanji.entry_id
+WHERE kanji.keb LIKE '食%'
+LIMIT 10;
+```
+
+**Application profiling:**
+```bash
+# Install profiling tools
+poetry add --group dev py-spy
+
+# Profile running application
+py-spy top --pid <process_id>
+
+# Generate flamegraph
+py-spy record -o profile.svg -- python -m uvicorn src.suca.main:app
 ```
 
 ---
 
-## 🗄️ Database Operations
-
-### Migrations
-
-```bash
-# Create new migration (auto-generate from models)
-poetry run alembic revision --autogenerate -m "add user table"
-
-# Create empty migration
-poetry run alembic revision -m "custom changes"
-
-# Apply migrations
-poetry run alembic upgrade head
-
-# Rollback one migration
-poetry run alembic downgrade -1
-
-# Rollback all migrations
-poetry run alembic downgrade base
-
-# View migration history
-poetry run alembic history
-
-# Check current migration
-poetry run alembic current
-```
-
-### Using Make Commands
-
-```bash
-# Create migration
-make migrate
-
-# Apply migrations
-make db-upgrade
-
-# Rollback
-make db-downgrade
-
-# Reset database (WARNING: destroys data!)
-make db-reset
-
-# View history
-make db-history
-```
-
-### Database Schema
-
-**Main Tables:**
-- `flashcard_decks` - User flashcard decks
-- `flashcards` - Individual flashcards
-- `entry` - Dictionary entries
-- `kanji` - Kanji forms
-- `reading` - Reading forms
-- `sense` - Word meanings
-- `gloss` - Definitions
-- `example` - Usage examples
-
----
-
-## 💻 Development
-
-### Using Makefile
-
-```bash
-# Show all commands
-make help
-
-# Install dependencies
-make dev-install
-
-# Run development server
-make run
-
-# Run tests
-make test
-make test-cov
-
-# Code quality
-make lint          # Check code
-make lint-fix      # Fix issues
-make format        # Format code
-make type-check    # Type checking
-
-# All checks
-make all-checks    # Lint + type-check + test
-make ci-checks     # CI pipeline checks
-
-# Database
-make migrate       # Create migration
-make db-upgrade    # Apply migrations
-make db-downgrade  # Rollback
-make db-reset      # Reset database
-
-# Cleanup
-make clean         # Remove cache files
-```
-
-### Code Quality Tools
-
-**Linting & Formatting:**
-```bash
-# Check code style
-poetry run ruff check src/ tests/
-
-# Auto-fix issues
-poetry run ruff check --fix src/ tests/
-
-# Format code
-poetry run ruff format src/ tests/
-```
-
-**Type Checking:**
-```bash
-poetry run mypy src/
-```
-
-**Pre-commit Checks:**
-```bash
-# Before committing
-make ci-checks
-```
-
-### Project Dependencies
-
-```bash
-# Show dependency tree
-poetry show --tree
-
-# Update dependencies
-poetry update
-
-# Add new dependency
-poetry add package-name
-
-# Add dev dependency
-poetry add --group dev package-name
-
-# Check for security issues
-poetry run pip-audit
-```
-
----
-
-## 🔄 CI/CD
+## CI/CD Pipeline
 
 ### GitHub Actions Workflows
 
-The project uses GitHub Actions for continuous integration and automated releases.
+**1. CI Pipeline (`.github/workflows/ci.yml`)**
 
-#### CI Pipeline (`ci.yml`)
+Triggers: Push to `main`/`develop`, Pull Requests
 
-Runs on every push and pull request to `main` or `develop` branches.
+Jobs:
+- **Lint** - ruff check for code style
+- **Type Check** - mypy static analysis (non-blocking)
+- **Test** - pytest with PostgreSQL service container
+  - Python 3.11, 3.12, 3.13 matrix
+  - Coverage reporting to Codecov
+- **Security** - Bandit security scanning
+- **Build** - Poetry package build validation
+- **Docker** - Multi-platform image build test
 
-**Jobs:**
-1. **Lint** - Code style checking with ruff
-2. **Type Check** - Type safety validation with mypy
-3. **Test** - Unit and integration tests with PostgreSQL
-4. **Security** - Security scanning with Bandit
-5. **Build** - Poetry package build validation
-6. **Docker** - Docker image build and test
-7. **Summary** - Overall CI status
+**2. Release Workflow (`.github/workflows/release.yml`)**
 
-**Features:**
-- ✅ Dependency caching for faster builds
-- ✅ Code coverage reporting
-- ✅ Parallel job execution
-- ✅ Artifact uploads for test results
-- ✅ PostgreSQL service container for tests
+Triggers: Version tags (`v*.*.*`)
 
-**Trigger CI:**
+Actions:
+- Build Poetry package
+- Create GitHub Release with artifacts
+- Publish Docker image to Docker Hub
+
+**3. CodeQL Analysis (`.github/workflows/codeql.yml`)**
+
+Triggers: Push to `main`, Weekly schedule
+
+- Advanced security vulnerability scanning
+- Results in GitHub Security tab
+
+**4. Dependency Updates (`.github/workflows/dependency-update.yml`)**
+
+Triggers: Weekly (Monday 9 AM UTC)
+
+- Checks for outdated dependencies
+- Creates PR with updates
+
+### Running CI Locally
+
+**Pre-commit checks:**
 ```bash
-# Push to main/develop
-git push origin main
-
-# Create pull request
-git push origin feature/my-feature
-# Then create PR on GitHub
-```
-
-#### Release Workflow (`release.yml`)
-
-Automatically creates releases when you push version tags.
-
-**Triggered by:**
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-**Actions:**
-- 📦 Builds Poetry package
-- 🚀 Creates GitHub Release with artifacts
-- 🐳 Publishes Docker image to Docker Hub
-- 📝 Generates release notes
-
-**Docker Image:**
-```bash
-# Pull the latest release
-docker pull yourusername/suca-api:latest
-
-# Pull specific version
-docker pull yourusername/suca-api:v1.0.0
-```
-
-#### CodeQL Security Analysis (`codeql.yml`)
-
-Runs advanced security scanning weekly and on every push.
-
-**Features:**
-- 🛡️ Detects security vulnerabilities
-- 🔍 Identifies code quality issues
-- 📊 Security reports in GitHub Security tab
-- ⏰ Weekly scheduled scans
-
-#### Dependency Updates (`dependency-update.yml`)
-
-Automatically checks for dependency updates weekly.
-
-**Features:**
-- 📅 Runs every Monday at 9 AM UTC
-- 🔄 Creates PR with updated dependencies
-- 📝 Detailed changelog in PR description
-- 🏷️ Auto-labeled with `dependencies`
-
-### CI/CD Best Practices
-
-**Before Pushing:**
-```bash
-# Run local CI checks
 make ci-checks
-
-# Ensure all tests pass
-make test-cov
-
-# Fix any linting issues
-make lint-fix
+# Runs: format-check, lint, type-check, test
 ```
 
-**Release Process:**
-1. Update version in `pyproject.toml`
-2. Commit changes: `git commit -m "chore: bump version to 1.0.0"`
-3. Create tag: `git tag v1.0.0`
-4. Push tag: `git push origin v1.0.0`
-5. GitHub Actions will:
-   - Run full CI pipeline
-   - Build package
-   - Create GitHub release
-   - Publish Docker image
+**Full CI simulation:**
+```bash
+# Lint
+make lint
 
-**Monitoring CI:**
-- View workflow runs: [GitHub Actions](https://github.com/yourusername/SUCA-api/actions)
-- Security alerts: [GitHub Security](https://github.com/yourusername/SUCA-api/security)
+# Type check
+make type-check
+
+# Test with PostgreSQL
+createdb test_jmdict
+DB_NAME=test_jmdict make test-cov
+
+# Security scan
+poetry run bandit -r src/
+
+# Build package
+poetry build
+```
+
+### Release Process
+
+1. Update version in `pyproject.toml`:
+```toml
+[tool.poetry]
+version = "1.0.0"
+```
+
+2. Commit and tag:
+```bash
+git add pyproject.toml
+git commit -m "chore: bump version to 1.0.0"
+git tag v1.0.0
+git push origin main --tags
+```
+
+3. GitHub Actions automatically:
+   - Runs full CI pipeline
+   - Builds package
+   - Creates GitHub Release
+   - Publishes Docker image
 
 ### Required Secrets
 
-Configure these in GitHub Settings → Secrets:
+Configure in GitHub Settings → Secrets:
 
-| Secret | Description | Required For |
-|--------|-------------|--------------|
-| `CODECOV_TOKEN` | Codecov upload token | Code coverage |
-| `DOCKER_HUB_USERNAME` | Docker Hub username | Docker publishing |
-| `DOCKER_HUB_TOKEN` | Docker Hub access token | Docker publishing |
-
----
-
-## 🚀 Deployment
-
-### Production Checklist
-
-- [ ] Set `DEBUG=false` in environment
-- [ ] Generate secure `JWT_SECRET_KEY` (32+ chars)
-- [ ] Configure PostgreSQL with strong credentials
-- [ ] Set up SSL/TLS for database connection
-- [ ] Configure CORS for your frontend domain
-- [ ] Set up rate limiting (nginx/API Gateway)
-- [ ] Enable logging to file/service
-- [ ] Set up monitoring (Sentry, DataDog, etc.)
-- [ ] Run database migrations
-- [ ] Test all endpoints in staging
-
-### Environment Setup
-
-```bash
-# Production .env
-DEBUG=false
-DB_HOST=your-db-host.com
-DB_PORT=5432
-DB_USER=suca_prod
-DB_PASS=secure-password
-DB_NAME=suca_production
-JWT_SECRET_KEY=<generate-with-openssl-rand-hex-32>
-API_TITLE=SUCA API
-API_VERSION=1.0.0
-```
-
-### Running with Gunicorn
-
-```bash
-# Install gunicorn
-poetry add gunicorn
-
-# Run with multiple workers
-poetry run gunicorn src.suca.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 \
-  --access-logfile - \
-  --error-logfile -
-```
-
-### Docker Deployment (Optional)
-
-```dockerfile
-FROM python:3.13-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY pyproject.toml poetry.lock ./
-RUN pip install poetry && poetry install --only=main
-
-# Copy application
-COPY . .
-
-# Run migrations and start server
-CMD poetry run alembic upgrade head && \
-    poetry run uvicorn src.suca.main:app --host 0.0.0.0 --port 8000
-```
+| Secret | Purpose |
+|--------|---------|
+| `CODECOV_TOKEN` | Upload coverage reports |
+| `DOCKER_HUB_USERNAME` | Publish Docker images |
+| `DOCKER_HUB_TOKEN` | Docker Hub authentication |
 
 ---
 
-## 🏗️ Architecture
-
-### Layered Architecture
-
-```
-┌─────────────────────────────────────────┐
-│          API Layer (FastAPI)            │
-│  - Endpoints (auth, flashcard, search)  │
-│  - Request/Response handling            │
-│  - JWT authentication                   │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│         Service Layer (Business)        │
-│  - FlashcardService                     │
-│  - SearchService                        │
-│  - Business logic & validation          │
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│        Database Layer (SQLModel)        │
-│  - Models (Flashcard, Deck, Entry)      │
-│  - Database operations                  │
-│  - Migrations (Alembic)                 │
-└─────────────────────────────────────────┘
-```
-
-### Key Design Principles
-
-1. **Separation of Concerns**
-   - API layer handles HTTP
-   - Service layer contains business logic
-   - Database layer manages data
-
-2. **Dependency Injection**
-   - FastAPI's DI system for clean dependencies
-   - Easy to test and swap implementations
-
-3. **Type Safety**
-   - Pydantic for request/response validation
-   - SQLModel for database models
-   - Full type hints throughout
-
-4. **Error Handling**
-   - Custom exceptions (ValidationException, DatabaseException)
-   - Structured error responses
-   - Proper HTTP status codes
-
-5. **Security First**
-   - JWT authentication
-   - Password hashing (Bcrypt/Argon2)
-   - Rate limiting
-   - User data isolation
-
-6. **Testability**
-   - Comprehensive test suite
-   - Fixtures for auth, database
-   - Isolated test database
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-### Getting Started
-
-1. **Fork the repository**
-2. **Clone your fork**
-   ```bash
-   git clone https://github.com/yourusername/SUCA-api.git
-   cd SUCA-api
-   ```
-3. **Create a branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-4. **Install dependencies**
-   ```bash
-   poetry install
-   ```
+## Contributing
 
 ### Development Workflow
 
-1. **Make your changes**
-   - Follow existing code style
-   - Add tests for new features
-   - Update documentation
-
-2. **Run checks**
-   ```bash
-   make ci-checks
-   ```
-
-3. **Commit your changes**
-   ```bash
-   git commit -m "feat: add amazing feature"
-   ```
-
-4. **Push to your fork**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-
-5. **Create Pull Request**
-   - Clear description of changes
-   - Link related issues
-   - Ensure CI passes
-
-### Commit Convention
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation changes
-- `test:` Adding tests
-- `refactor:` Code refactoring
-- `style:` Code style changes
-- `chore:` Maintenance tasks
-
-**Examples:**
+1. **Fork and clone:**
 ```bash
-git commit -m "feat: add user profile endpoint"
-git commit -m "fix: resolve token expiration bug"
-git commit -m "docs: update API endpoint examples"
+git clone https://github.com/YOUR_USERNAME/SUCA-api.git
+cd SUCA-api
+git remote add upstream https://github.com/SUCA-Team/SUCA-api.git
 ```
 
-### Code Style
+2. **Create feature branch:**
+```bash
+git checkout -b feature/intelligent-caching
+```
 
-- Use `ruff` for linting and formatting
-- Follow PEP 8 guidelines
-- Add type hints to all functions
-- Write docstrings for public APIs
-- Keep functions small and focused
+3. **Make changes with tests:**
+```bash
+# Write code
+vim src/suca/services/cache_service.py
 
-### Testing Requirements
+# Write tests
+vim tests/test_cache.py
 
-- All new features must have tests
-- Maintain >80% code coverage
-- Tests should be isolated and deterministic
+# Run checks
+make all-checks
+```
+
+4. **Commit with conventional commits:**
+```bash
+git commit -m "feat: add Redis caching for search results"
+```
+
+Commit types:
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation only
+- `refactor:` Code restructuring
+- `test:` Adding tests
+- `chore:` Tooling/config changes
+
+5. **Push and create PR:**
+```bash
+git push origin feature/intelligent-caching
+# Open pull request on GitHub
+```
+
+### Code Quality Standards
+
+**Type hints required:**
+```python
+def search_entries(
+    self,
+    query: str,
+    limit: int = 10
+) -> list[DictionaryEntryResponse]:
+    ...
+```
+
+**Docstrings for public APIs:**
+```python
+def create_flashcard(self, deck_id: int, data: FlashcardCreate) -> Flashcard:
+    """
+    Create a new flashcard in the specified deck.
+
+    Args:
+        deck_id: ID of the target deck
+        data: Flashcard content (front/back)
+
+    Returns:
+        Created flashcard instance
+
+    Raises:
+        NotFoundException: Deck not found
+        ValidationException: Invalid flashcard data
+    """
+    ...
+```
+
+**Test coverage:**
+- All new features must include tests
+- Aim for >80% coverage
 - Use fixtures for common setups
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file.
 
----
+## Support
 
-## 👥 Authors
-
-- **SUCA Team** - [GitHub](https://github.com/yourusername)
-
----
-
-## 🙏 Acknowledgments
-
-- JMdict project for Japanese dictionary data
-- FastAPI for the amazing web framework
-- SQLModel for elegant database models
-- Poetry for dependency management
+- **Issues**: [GitHub Issues](https://github.com/SUCA-Team/SUCA-api/issues)
+- **Documentation**: http://localhost:8000/docs
+- **Repository**: https://github.com/SUCA-Team/SUCA-api
 
 ---
 
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/SUCA-api/issues)
-- **Email**: support@suca-api.com
-- **Docs**: http://localhost:8000/docs
-
----
-
-**Built with ❤️ by SUCA Team**
+**Built with FastAPI, SQLModel, and PostgreSQL**

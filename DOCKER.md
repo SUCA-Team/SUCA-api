@@ -11,7 +11,7 @@
 # 1. Copy the Docker environment template
 cp .env.docker .env
 
-# 2. Generate and set JWT secret key
+# 2. Generate and set JWT secret key (optional but recommended)
 echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> .env
 
 # 3. Start all services
@@ -19,6 +19,9 @@ make docker-up-build
 
 # 4. Run database migrations
 make docker-migrate
+
+# 5. Restore dictionary data (required!)
+make docker-db-restore FILE=dump.sql
 
 # 5. Access the application
 # API: http://localhost:8000

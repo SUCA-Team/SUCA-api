@@ -27,7 +27,7 @@ def search(
     """
     try:
         # Create search request
-        search_request = SearchRequest(query=q, limit=limit, include_rare=include_rare)
+        search_request = SearchRequest(query=q, limit=limit, page=page, include_rare=include_rare)
 
         # Use search service
         return search_service.search_entries(search_request)

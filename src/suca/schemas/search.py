@@ -36,6 +36,7 @@ class SearchResponse(BaseResponse):
     total_count: int = Field(description="Total number of results found")
     query: str | None = Field(None, description="Original search query")
 
+
 class SearchSuggestionResponse(BaseModel):
     """Response model for search suggestions."""
 
