@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from ....api.deps import SearchServiceDep
 from ....core.exceptions import HTTPExceptions, SearchException
-from ....schemas.search import SearchRequest, SearchResponse, SearchSuggestionResponse
+from ....schemas.search import SearchPos, SearchRequest, SearchResponse, SearchSuggestionResponse
 from ....utils.logging import logger
 
 router = APIRouter(prefix="/search", tags=["Search"])
@@ -16,7 +16,7 @@ def search(
     q: str = Query(..., description="Search query", min_length=1),
     limit: int = Query(default=10, ge=1, le=100, description="Maximum results to return"),
     page: int = Query(default=1, ge=1, description="Page number for paginated results"),
-    pos: str = Query(default=None, description="Part of speech filter"),
+    pos: SearchPos | None = Query(default=None, description="Part of speech filter"),
     include_rare: bool = Query(default=False, description="Include rare/uncommon words"),
 ) -> SearchResponse:
     """
