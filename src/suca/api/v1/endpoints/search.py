@@ -17,7 +17,7 @@ def search(
     limit: int = Query(default=10, ge=1, le=100, description="Maximum results to return"),
     page: int = Query(default=1, ge=1, description="Page number for paginated results"),
     pos: SearchPos | None = Query(default=None, description="Part of speech filter"),
-    include_rare: bool = Query(default=False, description="Include rare/uncommon words"),
+    include_rare: bool = Query(default=True, description="Include rare/uncommon words"),
 ) -> SearchResponse:
     """
     Search dictionary entries with prioritization:

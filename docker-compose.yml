@@ -56,6 +56,8 @@ services:
     volumes:
       # Mount code for development (comment out for production)
       - ./src:/app/src
+      # Mount alembic migrations for seamless database migrations
+      - ./alembic:/app/alembic
       # Mount logs directory
       - ./logs:/app/logs
 
