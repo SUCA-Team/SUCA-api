@@ -225,6 +225,10 @@ class SearchService(BaseService[Entry]):
         if not request.include_rare:
             stmt = stmt.where(col(Entry.is_common))
 
+        # Filter by part of speech if requested
+        if request.pos:
+            stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
+
         # Execute and process results
         results = self.session.exec(stmt).all()
         return self._process_search_results(results, request, query, "English")
@@ -308,6 +312,7 @@ class SearchService(BaseService[Entry]):
             .select_from(Entry)
             .outerjoin(Kanji, col(Entry.ent_seq) == col(Kanji.entry_id))
             .outerjoin(Reading, col(Entry.ent_seq) == col(Reading.entry_id))
+            .join(Sense, col(Entry.ent_seq) == col(Sense.entry_id))
             .where(or_(col(Kanji.keb).like(f"%{query}%"), col(Reading.reb).like(f"%{query}%")))
             .group_by(col(Entry.ent_seq))
             .having(priority_score > 0)  # Only entries with matches
@@ -319,6 +324,10 @@ class SearchService(BaseService[Entry]):
         # If not including rare words, filter by common
         if not request.include_rare:
             stmt = stmt.where(col(Entry.is_common))
+
+        # Filter by part of speech if requested
+        if request.pos:
+            stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
 
         # Execute and process results
         results = self.session.exec(stmt).all()

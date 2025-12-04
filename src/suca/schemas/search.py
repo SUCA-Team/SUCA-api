@@ -1,5 +1,6 @@
 """Search-related schemas."""
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -51,3 +52,11 @@ class SearchRequest(BaseModel):
     page: int = Field(default=1, ge=1, description="Page number for paginated results")
     pos: str | None = Field(default=None, description="Part of speech filter")
     include_rare: bool = Field(default=False, description="Include rare/uncommon words")
+
+
+class SearchPos(str, Enum):
+    """Enumeration for parts of speech."""
+
+    NOUN = "noun"
+    VERB = "verb"
+    ADJECTIVE = "adjective"
