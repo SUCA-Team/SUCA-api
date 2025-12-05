@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from sqlmodel import Field, Relationship, SQLModel
 
 
-# Database models for the SUCA dictionary
 class Entry(SQLModel, table=True):
     ent_seq: int = Field(primary_key=True)
     is_common: bool
@@ -60,7 +59,9 @@ class Example(SQLModel, table=True):
     sense: "Sense" = Relationship(back_populates="examples")
 
 
-# Database models for the SUCA flashcard
+# === Flashcard Models ===
+
+
 class FlashcardDeck(SQLModel, table=True):
     """Flashcard deck model."""
 
@@ -73,19 +74,35 @@ class FlashcardDeck(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
-    flashcards: list["Flashcard"] = Relationship(back_populates="deck")
+    flashcards: list["Flashcard"] = Relationship(
+        back_populates="deck", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class Flashcard(SQLModel, table=True):
-    """Flashcard model."""
+    """Flashcard model with FSRS scheduling - ALL DATA STORED IN DATABASE."""
 
     __tablename__ = "flashcards"
 
+    # Basic fields
     id: int | None = Field(default=None, primary_key=True)
     deck_id: int = Field(foreign_key="flashcard_decks.id", index=True)
     user_id: str = Field(index=True)
     front: str
     back: str
+
+    # ========== FSRS FIELDS (STORED IN POSTGRESQL) ==========
+    due: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    stability: float = Field(default=0.0)
+    difficulty: float = Field(default=0.0)
+    elapsed_days: int = Field(default=0)
+    scheduled_days: int = Field(default=0)
+    reps: int = Field(default=0)
+    lapses: int = Field(default=0)
+    state: int = Field(default=0)  # 0=New, 1=Learning, 2=Review, 3=Relearning
+    last_review: datetime | None = Field(default=None)
+    # ========================================================
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

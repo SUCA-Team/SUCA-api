@@ -1,5 +1,6 @@
 """Utility functions and helpers."""
 
+from .fsrs import FSRS, Card, Rating, ReviewLog
 from .logging import logger, setup_logging
 from .text import (
     extract_hiragana,
@@ -17,4 +18,9 @@ __all__ = [
     "extract_hiragana",
     "extract_katakana",
     "is_japanese_text",
+    # FSRS
+    "FSRS",
+    "Card",
+    "Rating",
+    "ReviewLog",
 ]

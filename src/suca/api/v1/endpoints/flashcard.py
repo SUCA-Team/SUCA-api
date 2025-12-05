@@ -1,11 +1,10 @@
-"""Flashcard endpoints."""
+"""Flashcard endpoints with FSRS review."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from ....api.deps import get_session
+from ....api.deps import SessionDep
 from ....core.auth import get_current_user_id
 from ....core.exceptions import DatabaseException, ValidationException
 from ....schemas.flashcard_schemas import (
@@ -13,59 +12,62 @@ from ....schemas.flashcard_schemas import (
     DeckListResponse,
     DeckResponse,
     DeckUpdate,
-    FlashcardCreate,
     FlashcardCreateNested,
     FlashcardListResponse,
     FlashcardResponse,
+    FlashcardReviewRequest,
+    FlashcardReviewResponse,
     FlashcardUpdate,
 )
 from ....services.flashcard_service import FlashcardService
 
 router = APIRouter(prefix="/flashcard", tags=["Flashcard"])
 
+# Type alias
+UserIdDep = Annotated[str, Depends(get_current_user_id)]
 
-def get_flashcard_service(session: Session = Depends(get_session)) -> FlashcardService:
-    """Get flashcard service instance."""
+
+def get_flashcard_service(session: SessionDep) -> FlashcardService:
+    """Dependency to get FlashcardService."""
     return FlashcardService(session)
 
 
-# Type aliases for dependencies
-UserIdDep = Annotated[str, Depends(get_current_user_id)]
 FlashcardServiceDep = Annotated[FlashcardService, Depends(get_flashcard_service)]
 
 
-# ===== Deck Endpoints =====
+# === Deck Endpoints ===
 
 
-@router.get("/decks", response_model=DeckListResponse)
-def list_flashcard_decks(
-    user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> DeckListResponse:
-    """Get all decks for current user. Requires authentication."""
+@router.post("/decks", response_model=DeckResponse, status_code=201)
+def create_deck(
+    deck_data: DeckCreate, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+):
+    """Create a new flashcard deck. Requires authentication."""
     try:
-        return flashcard_service.get_user_decks(user_id)
+        deck = flashcard_service.create_deck(deck_data, user_id)
+        return DeckResponse.model_validate(deck)
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/decks", response_model=DeckResponse, status_code=201)
-def create_flashcard_deck(
-    deck: DeckCreate, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> DeckResponse:
-    """Create a new flashcard deck. Requires authentication."""
+@router.get("/decks", response_model=DeckListResponse)
+def get_decks(user_id: UserIdDep, flashcard_service: FlashcardServiceDep):
+    """Get all flashcard decks for the authenticated user."""
     try:
-        return flashcard_service.create_deck(user_id, deck)
+        decks = flashcard_service.get_decks(user_id)
+        return DeckListResponse(
+            decks=[DeckResponse.model_validate(d) for d in decks], total_count=len(decks)
+        )
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/decks/{deck_id}", response_model=DeckResponse)
-def get_flashcard_deck(
-    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> DeckResponse:
-    """Get a specific deck. Requires authentication."""
+def get_deck(deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep):
+    """Get a specific flashcard deck. Requires authentication."""
     try:
-        return flashcard_service.get_deck(deck_id, user_id)
+        deck = flashcard_service.get_deck_by_id(deck_id, user_id)
+        return DeckResponse.model_validate(deck)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
@@ -73,15 +75,16 @@ def get_flashcard_deck(
 
 
 @router.put("/decks/{deck_id}", response_model=DeckResponse)
-def update_flashcard_deck(
+def update_deck(
     deck_id: int,
-    deck_update: DeckUpdate,
+    deck_data: DeckUpdate,
     user_id: UserIdDep,
     flashcard_service: FlashcardServiceDep,
-) -> DeckResponse:
+):
     """Update a flashcard deck. Requires authentication."""
     try:
-        return flashcard_service.update_deck(deck_id, user_id, deck_update)
+        deck = flashcard_service.update_deck(deck_id, deck_data, user_id)
+        return DeckResponse.model_validate(deck)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
@@ -89,7 +92,7 @@ def update_flashcard_deck(
 
 
 @router.delete("/decks/{deck_id}", status_code=204)
-def delete_flashcard_deck(deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep):
+def delete_deck(deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep):
     """Delete a flashcard deck and all its cards. Requires authentication."""
     try:
         flashcard_service.delete_deck(deck_id, user_id)
@@ -99,35 +102,43 @@ def delete_flashcard_deck(deck_id: int, user_id: UserIdDep, flashcard_service: F
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===== Flashcard Endpoints (Nested under Decks) =====
+# === Flashcard Endpoints (Nested Routes) ===
 
 
-@router.get("/decks/{deck_id}/cards", response_model=FlashcardListResponse)
-def get_flashcards(
-    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> FlashcardListResponse:
-    """Get all flashcards in a deck. Requires authentication."""
+@router.post(
+    "/decks/{deck_id}/cards", response_model=FlashcardResponse, status_code=201
+)
+def create_flashcard(
+    deck_id: int,
+    flashcard_data: FlashcardCreateNested,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+):
+    """
+    Create a new flashcard in a deck. Requires authentication.
+
+    The flashcard will be initialized with FSRS default values for optimal spaced repetition.
+    """
     try:
-        return flashcard_service.get_deck_flashcards(deck_id, user_id)
+        flashcard = flashcard_service.create_flashcard(deck_id, flashcard_data, user_id)
+        return FlashcardResponse.model_validate(flashcard)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/decks/{deck_id}/cards", response_model=FlashcardResponse, status_code=201)
-def add_flashcard(
+@router.get("/decks/{deck_id}/cards", response_model=FlashcardListResponse)
+def get_flashcards(
     deck_id: int,
-    flashcard: FlashcardCreateNested,
     user_id: UserIdDep,
     flashcard_service: FlashcardServiceDep,
-) -> FlashcardResponse:
-    """Add a new flashcard to a deck. Requires authentication."""
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Get all flashcards in a deck. Requires authentication."""
     try:
-        flashcard_with_deck = FlashcardCreate(
-            deck_id=deck_id, front=flashcard.front, back=flashcard.back
-        )
-        return flashcard_service.create_flashcard(user_id, flashcard_with_deck)
+        return flashcard_service.get_flashcards(deck_id, user_id, page, page_size)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
@@ -137,17 +148,11 @@ def add_flashcard(
 @router.get("/decks/{deck_id}/cards/{card_id}", response_model=FlashcardResponse)
 def get_flashcard(
     deck_id: int, card_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> FlashcardResponse:
+):
     """Get a specific flashcard. Requires authentication."""
     try:
-        flashcard = flashcard_service.get_flashcard(card_id, user_id)
-
-        if flashcard.deck_id != deck_id:
-            raise HTTPException(
-                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
-            )
-
-        return flashcard
+        flashcard = flashcard_service.get_flashcard_by_id(deck_id, card_id, user_id)
+        return FlashcardResponse.model_validate(flashcard)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
@@ -158,20 +163,16 @@ def get_flashcard(
 def update_flashcard(
     deck_id: int,
     card_id: int,
-    flashcard_update: FlashcardUpdate,
+    flashcard_data: FlashcardUpdate,
     user_id: UserIdDep,
     flashcard_service: FlashcardServiceDep,
-) -> FlashcardResponse:
+):
     """Update a flashcard. Requires authentication."""
     try:
-        flashcard = flashcard_service.get_flashcard(card_id, user_id)
-
-        if flashcard.deck_id != deck_id:
-            raise HTTPException(
-                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
-            )
-
-        return flashcard_service.update_flashcard(card_id, user_id, flashcard_update)
+        flashcard = flashcard_service.update_flashcard(
+            deck_id, card_id, flashcard_data, user_id
+        )
+        return FlashcardResponse.model_validate(flashcard)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:
@@ -184,15 +185,61 @@ def delete_flashcard(
 ):
     """Delete a flashcard. Requires authentication."""
     try:
-        flashcard = flashcard_service.get_flashcard(card_id, user_id)
-
-        if flashcard.deck_id != deck_id:
-            raise HTTPException(
-                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
-            )
-
-        flashcard_service.delete_flashcard(card_id, user_id)
+        flashcard_service.delete_flashcard(deck_id, card_id, user_id)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === FSRS Review Endpoints ===
+
+
+@router.post(
+    "/decks/{deck_id}/cards/{card_id}/review",
+    response_model=FlashcardReviewResponse,
+    summary="Review a flashcard",
+    description=(
+        "Review a flashcard and update its schedule using FSRS algorithm.\n\n"
+        "**Ratings:**\n"
+        "- 1 = Again (forgot completely)\n"
+        "- 2 = Hard (remembered with difficulty)\n"
+        "- 3 = Good (remembered correctly)\n"
+        "- 4 = Easy (remembered very easily)\n\n"
+        "**Requires authentication**"
+    ),
+)
+def review_flashcard(
+    deck_id: int,
+    card_id: int,
+    review_data: FlashcardReviewRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> FlashcardReviewResponse:
+    """Review a flashcard and update its schedule using FSRS."""
+    try:
+        return flashcard_service.review_flashcard(deck_id, card_id, review_data, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/due",
+    response_model=list[FlashcardResponse],
+    summary="Get due flashcards",
+    description="Get all flashcards that are due for review now. Optionally filter by deck.",
+)
+def get_due_flashcards(
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+    deck_id: int | None = None,
+    limit: int = 20,
+) -> list[FlashcardResponse]:
+    """Get flashcards due for review."""
+    try:
+        flashcards = flashcard_service.get_due_flashcards(user_id, deck_id, limit)
+        return [FlashcardResponse.model_validate(fc) for fc in flashcards]
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))
