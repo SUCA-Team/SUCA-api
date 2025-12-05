@@ -64,7 +64,7 @@ app = FastAPI(
         {
             "name": "Authentication",
             "description": "Authentication and user management endpoints. "
-            "Use `/auth/login` to get a JWT token, then click the 'Authorize' button.",
+            "Uses Firebase Authentication.",
         },
         {"name": "Health", "description": "Health check and system status endpoints."},
         {

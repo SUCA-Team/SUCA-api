@@ -49,6 +49,9 @@ services:
       
       # CORS settings
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      
+      # Firebase settings
+      FIREBASE_CREDENTIALS_PATH: ${FIREBASE_CREDENTIALS_PATH:-/app/suca-database-sdk.json}
     depends_on:
       db:
         condition: service_healthy
@@ -61,6 +64,8 @@ services:
       - ./alembic:/app/alembic
       # Mount logs directory
       - ./logs:/app/logs
+      # Mount Firebase credentials (place suca-database-sdk.json in project root)
+      - ./suca-database-sdk.json:/app/suca-database-sdk.json:ro
 
   # Optional: PgAdmin for database management
   pgadmin:
