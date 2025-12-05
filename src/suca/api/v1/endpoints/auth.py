@@ -1,6 +1,5 @@
 """Authentication endpoints with Firebase integration."""
 
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -36,28 +35,12 @@ class UserResponse(BaseModel):
     """User info response."""
 
     user_id: str = Field(
-        ..., 
-        description="Unique user identifier (Firebase UID)", 
-        examples=["firebase_uid_123"]
+        ..., description="Unique user identifier (Firebase UID)", examples=["firebase_uid_123"]
     )
-    email: str | None = Field(
-        None, 
-        description="User email", 
-        examples=["user@example.com"]
-    )
-    email_verified: bool | None = Field(
-        None, 
-        description="Whether email is verified"
-    )
-    display_name: str | None = Field(
-        None, 
-        description="User display name", 
-        examples=["John Doe"]
-    )
-    photo_url: str | None = Field(
-        None, 
-        description="User photo URL"
-    )
+    email: str | None = Field(None, description="User email", examples=["user@example.com"])
+    email_verified: bool | None = Field(None, description="Whether email is verified")
+    display_name: str | None = Field(None, description="User display name", examples=["John Doe"])
+    photo_url: str | None = Field(None, description="User photo URL")
 
 
 # ===== Endpoints =====
@@ -85,14 +68,14 @@ class UserResponse(BaseModel):
 def verify_token(request: Request, token_data: FirebaseTokenVerify) -> UserResponse:
     """
     Verify Firebase ID token and return user information.
-    
+
     This is the primary authentication endpoint for Firebase-authenticated users.
     """
     try:
         decoded_token = verify_firebase_token(token_data.id_token)
-        
+
         logger.info(f"Token verified for Firebase user: {decoded_token.get('uid')}")
-        
+
         return UserResponse(
             user_id=decoded_token.get("uid", ""),
             email=decoded_token.get("email"),

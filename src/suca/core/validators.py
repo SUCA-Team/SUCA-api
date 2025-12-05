@@ -3,7 +3,7 @@
 import os
 
 
-def validate_required_env_vars():
+def validate_required_env_vars() -> None:
     """Validate that all required environment variables are set."""
     required_vars = {
         "DB_HOST": "Database host",
@@ -25,7 +25,7 @@ def validate_required_env_vars():
         )
 
 
-def validate_jwt_secret():
+def validate_jwt_secret() -> None:
     """Validate JWT secret key."""
     secret = os.getenv("JWT_SECRET_KEY")
 
