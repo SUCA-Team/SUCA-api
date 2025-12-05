@@ -13,10 +13,13 @@ from ....schemas.flashcard_schemas import (
     DeckListResponse,
     DeckResponse,
     DeckUpdate,
+    DueCardsResponse,
     FlashcardCreate,
     FlashcardCreateNested,
     FlashcardListResponse,
     FlashcardResponse,
+    FlashcardReviewRequest,
+    FlashcardReviewResponse,
     FlashcardUpdate,
 )
 from ....services.flashcard_service import FlashcardService
@@ -194,5 +197,60 @@ def delete_flashcard(
         flashcard_service.delete_flashcard(card_id, user_id)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== FSRS Review Endpoints =====
+
+
+@router.post("/decks/{deck_id}/cards/{card_id}/review", response_model=FlashcardReviewResponse)
+def review_flashcard(
+    deck_id: int,
+    card_id: int,
+    review: FlashcardReviewRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> FlashcardReviewResponse:
+    """
+    Review a flashcard with FSRS rating.
+
+    Rating values:
+    - 1 = Again (forgot completely)
+    - 2 = Hard (remembered with difficulty)
+    - 3 = Good (remembered correctly)
+    - 4 = Easy (remembered instantly)
+
+    Requires authentication.
+    """
+    try:
+        flashcard = flashcard_service.get_flashcard(card_id, user_id)
+
+        if flashcard.deck_id != deck_id:
+            raise HTTPException(
+                status_code=404, detail=f"Flashcard {card_id} not found in deck {deck_id}"
+            )
+
+        return flashcard_service.review_flashcard(card_id, user_id, review)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/due", response_model=DueCardsResponse)
+def get_due_cards(user_id: UserIdDep, flashcard_service: FlashcardServiceDep) -> DueCardsResponse:
+    """
+    Get all cards due for review across all decks.
+
+    Returns statistics including:
+    - Total cards per deck
+    - New/Learning/Review card counts
+    - Cards currently due for review
+
+    Requires authentication.
+    """
+    try:
+        return flashcard_service.get_due_cards(user_id)
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))

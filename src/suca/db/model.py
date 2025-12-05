@@ -60,7 +60,6 @@ class Example(SQLModel, table=True):
     sense: "Sense" = Relationship(back_populates="examples")
 
 
-# Database models for the SUCA flashcard
 class FlashcardDeck(SQLModel, table=True):
     """Flashcard deck model."""
 
@@ -72,12 +71,11 @@ class FlashcardDeck(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
-    # Relationships
     flashcards: list["Flashcard"] = Relationship(back_populates="deck")
 
 
 class Flashcard(SQLModel, table=True):
-    """Flashcard model."""
+    """Flashcard model with FSRS fields."""
 
     __tablename__: ClassVar[str] = "flashcards"  # type: ignore[misc]
 
@@ -88,6 +86,14 @@ class Flashcard(SQLModel, table=True):
     back: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # FSRS fields (matching FSRS v6.3.0 Card structure)
+    difficulty: float = Field(default=0.0)
+    stability: float = Field(default=0.0)
+    reps: int = Field(default=0)  # Maps to FSRS 'step' field
+    state: int = Field(default=0)  # 0=New, 1=Learning, 2=Review, 3=Relearning
+    last_review: datetime | None = Field(default=None)
+    due: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relationships
     deck: FlashcardDeck | None = Relationship(back_populates="flashcards")

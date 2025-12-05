@@ -1,11 +1,37 @@
 # SUCA API
 
-FastAPI-based Japanese dictionary and flashcard management system with intelligent bilingual search, JWT authentication, and optimized PostgreSQL database.
+FastAPI-based Japanese dictionary and flashcard management system with intelligent bilingual search, JWT authentication, FSRS spaced repetition, and optimized PostgreSQL database.
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.118-009688.svg)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![FSRS](https://img.shields.io/badge/FSRS-v6.3.0-brightgreen.svg)](https://github.com/open-spaced-repetition/fsrs-rs)
+
+## Features
+
+✨ **Japanese Dictionary Search**
+- 180,000+ JMdict entries with kanji, readings, and definitions
+- Intelligent bilingual search (auto-detects Japanese/English)
+- Smart ranking: common words prioritized, exact matches first
+- JLPT level tagging and word frequency data
+
+🃏 **Smart Flashcard System**
+- FSRS (Free Spaced Repetition Scheduler) v6.3.0 integration
+- Adaptive review scheduling based on memory science
+- Track difficulty, stability, and retrievability per card
+- Multi-deck organization with due card statistics
+
+🔐 **Secure Authentication**
+- JWT-based authentication with refresh tokens
+- bcrypt password hashing
+- User isolation for personal flashcard data
+
+⚡ **Production-Ready**
+- Docker deployment with PostgreSQL 16
+- Comprehensive test suite (60+ tests)
+- Type-safe with mypy and Pydantic
+- Auto-generated API documentation (OpenAPI/Swagger)
 
 ## Table of Contents
 
@@ -67,6 +93,7 @@ make run
 - **ORM**: SQLModel (SQLAlchemy 2.0 + Pydantic)
 - **Database**: PostgreSQL 16
 - **Authentication**: JWT with bcrypt password hashing
+- **Spaced Repetition**: FSRS (Free Spaced Repetition Scheduler) v6.3.0
 - **Testing**: pytest with async support
 - **Code Quality**: ruff (linting + formatting), mypy (type checking)
 - **Containerization**: Docker + Docker Compose
@@ -77,7 +104,7 @@ make run
 src/suca/
 ├── api/v1/endpoints/     # HTTP request handlers
 │   ├── auth.py           # JWT authentication (register, login, me)
-│   ├── flashcard.py      # CRUD for decks and cards
+│   ├── flashcard.py      # CRUD for decks and cards with FSRS
 │   ├── search.py         # Bilingual dictionary search
 │   └── health.py         # Health check endpoint
 ├── core/                 # Configuration and middleware
@@ -91,7 +118,8 @@ src/suca/
 │   └── base.py           # Base model with timestamps
 ├── services/             # Business logic layer
 │   ├── search_service.py # Search algorithms and query optimization
-│   └── flashcard_service.py # Flashcard CRUD operations
+│   ├── flashcard_service.py # Flashcard CRUD with FSRS integration
+│   └── fsrs_service.py   # FSRS spaced repetition wrapper
 ├── schemas/              # Pydantic request/response models
 └── main.py               # FastAPI application factory
 ```
@@ -623,7 +651,33 @@ Response: 200 OK
 }
 ```
 
-### Flashcard Management
+### Flashcard Management with FSRS
+
+SUCA uses **FSRS (Free Spaced Repetition Scheduler)** v6.3.0 for intelligent flashcard scheduling based on spaced repetition science.
+
+**What is FSRS?**
+
+FSRS is a modern spaced repetition algorithm that optimizes review intervals based on:
+- **Difficulty**: How hard the card is to remember
+- **Stability**: How long the memory lasts
+- **Retrievability**: Current probability of recall
+- **Review history**: Your actual performance over time
+
+Unlike traditional SM-2 algorithms, FSRS uses a sophisticated memory model that adapts to your learning patterns.
+
+**Card States:**
+- **New (0)**: Never reviewed
+- **Learning (1)**: Initial learning phase
+- **Review (2)**: In long-term memory
+- **Relearning (3)**: Forgotten and relearning
+
+**Rating System:**
+```
+1 = Again    - Completely forgot
+2 = Hard     - Difficult to recall
+3 = Good     - Recalled correctly
+4 = Easy     - Recalled effortlessly
+```
 
 **List Decks:**
 ```http
@@ -685,8 +739,74 @@ Response: 201 Created
   "user_id": "testuser",
   "front": "食べる",
   "back": "to eat",
+  "difficulty": 0.0,
+  "stability": 0.0,
+  "reps": 0,
+  "state": 0,
+  "last_review": null,
+  "due": "2025-12-04T10:05:00Z",
   "created_at": "2025-12-04T10:05:00Z",
   "updated_at": "2025-12-04T10:05:00Z"
+}
+```
+
+**Review Card (FSRS):**
+```http
+POST /api/v1/flashcard/decks/1/cards/1/review
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "rating": 3
+}
+
+Response: 200 OK
+{
+  "id": 1,
+  "deck_id": 1,
+  "user_id": "testuser",
+  "front": "食べる",
+  "back": "to eat",
+  "difficulty": 5.42,
+  "stability": 2.31,
+  "reps": 1,
+  "state": 1,
+  "last_review": "2025-12-04T10:10:00Z",
+  "due": "2025-12-06T14:25:00Z",
+  "retrievability": 0.95,
+  "created_at": "2025-12-04T10:05:00Z",
+  "updated_at": "2025-12-04T10:10:00Z"
+}
+```
+
+**FSRS Fields Explained:**
+- `difficulty`: Card difficulty (higher = harder)
+- `stability`: Memory retention in days
+- `reps`: Number of reviews (maps to FSRS `step`)
+- `state`: Card state (0=New, 1=Learning, 2=Review, 3=Relearning)
+- `last_review`: When last reviewed
+- `due`: Next review scheduled time
+- `retrievability`: Current recall probability (0-1)
+
+**Get Due Cards:**
+```http
+GET /api/v1/flashcard/due
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "decks": [
+    {
+      "deck_id": 1,
+      "deck_name": "JLPT N5 Vocabulary",
+      "total_cards": 25,
+      "new_cards": 10,
+      "learning_cards": 5,
+      "review_cards": 10,
+      "due_cards": 8
+    }
+  ],
+  "total_due": 8
 }
 ```
 
