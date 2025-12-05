@@ -342,7 +342,7 @@ class SearchService(BaseService[Entry]):
 
         # Filter by part of speech if requested
         if request.pos:
-            stmt = stmt.where(col(Sense.pos).like(f"% {request.pos} %"))
+            stmt = stmt.where(col(Sense.pos).ilike(f"%{request.pos}%"))
 
         # Execute and process results
         results = self.session.exec(stmt).all()
@@ -451,7 +451,7 @@ class SearchService(BaseService[Entry]):
 
         # Filter by part of speech if requested
         if request.pos:
-            stmt = stmt.where(col(Sense.pos).like(f"% {request.pos} %"))
+            stmt = stmt.where(col(Sense.pos).like(f"%{request.pos}%"))
 
         # Execute and process results
         results = self.session.exec(stmt).all()
