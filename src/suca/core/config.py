@@ -61,6 +61,23 @@ class Settings(BaseModel):
 
         return secret
 
+    # Firebase Authentication
+    @property
+    def firebase_credentials_path(self) -> str:
+        """Get Firebase service account credentials path."""
+        path = os.getenv("FIREBASE_CREDENTIALS_PATH") or os.getenv("PATH_TO_SDK_JSON")
+
+        if not path:
+            if not self.debug:
+                raise ValueError(
+                    "FIREBASE_CREDENTIALS_PATH must be set! "
+                    "Download service account key from Firebase Console"
+                )
+            # Development - allow running without Firebase
+            return ""
+
+        return path
+
 
 # Global settings instance
 settings = Settings()

@@ -1,19 +1,16 @@
-"""Authentication endpoints."""
+"""Authentication endpoints with Firebase integration."""
 
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ....core.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
+    get_current_user,
     get_current_user_id,
-    get_password_hash,
-    verify_password,
+    verify_firebase_token,
 )
 from ....utils.logging import logger
 
@@ -21,223 +18,79 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 limiter = Limiter(key_func=get_remote_address)
 
 
-# ===== Schemas with Examples =====
-
-# load_dotenv()
-# default_app = firebase_admin.initialize_app(firebase_admin.credentials.RefreshToken(os.getenv("PATH_TO_SDK_JSON")))
-# print(firebase_auth.list_users())
+# ===== Schemas =====
 
 
-class UserRegister(BaseModel):
-    """User registration schema."""
+class FirebaseTokenVerify(BaseModel):
+    """Firebase ID token verification schema."""
 
-    username: str = Field(
+    id_token: str = Field(
         ...,
-        min_length=3,
-        max_length=50,
-        description="Username (3-50 characters, alphanumeric and underscores)",
-        examples=["john_doe"],
-    )
-    email: EmailStr = Field(
-        ...,
-        description="Valid email address",
-        examples=["john@example.com"],
-    )
-    password: str = Field(
-        ...,
-        min_length=8,
-        max_length=128,
-        description="Password (8-128 characters)",
-        examples=["mypassword123"],
-    )
-
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        """Validate username format."""
-        if len(v) < 3:
-            raise ValueError("Username must be at least 3 characters")
-        if len(v) > 50:
-            raise ValueError("Username must be at most 50 characters")
-        if not v.replace("_", "").isalnum():
-            raise ValueError("Username must contain only letters, numbers, and underscores")
-        return v
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """Validate password strength."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if len(v) > 128:
-            raise ValueError("Password must be at most 128 characters")
-        return v
-
-
-class UserLogin(BaseModel):
-    """User login schema."""
-
-    username: str = Field(
-        ...,
-        description="Your username",
-        examples=["demo_user"],  # ← Demo account example
-    )
-    password: str = Field(
-        ...,
-        description="Your password",
-        examples=["password123"],  # ← Demo password example
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "username": "demo_user",
-                    "password": "password123",
-                }
-            ]
-        }
-    }
-
-
-class Token(BaseModel):
-    """Token response schema."""
-
-    access_token: str = Field(
-        ...,
-        description="JWT access token",
-        examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."],
-    )
-    token_type: str = Field(
-        default="bearer",
-        description="Token type (always 'bearer')",
-    )
-    expires_in: int = Field(
-        ...,
-        description="Token expiration time in seconds",
-        examples=[1800],
+        description="Firebase ID token from client SDK",
+        examples=["eyJhbGciOiJSUzI1NiIsImtpZCI6IjAx..."],
     )
 
 
 class UserResponse(BaseModel):
     """User info response."""
 
-    user_id: str = Field(..., description="Unique user identifier", examples=["demo_user"])
-    username: str = Field(..., description="Username", examples=["demo_user"])
-    email: str = Field(..., description="User email", examples=["demo@example.com"])
-
-
-# ===== Mock User Database =====
-
-
-def _init_mock_users():
-    """Initialize mock users database."""
-    return {
-        "demo_user": {
-            "user_id": "demo_user",
-            "username": "demo_user",
-            "email": "demo@example.com",
-            "hashed_password": get_password_hash("password123"),
-        }
-    }
-
-
-MOCK_USERS_DB = {}
-
-
-def get_mock_users_db():
-    """Get or initialize mock users database."""
-    global MOCK_USERS_DB
-    if not MOCK_USERS_DB:
-        MOCK_USERS_DB = _init_mock_users()
-    return MOCK_USERS_DB
+    user_id: str = Field(
+        ..., description="Unique user identifier (Firebase UID)", examples=["firebase_uid_123"]
+    )
+    email: str | None = Field(None, description="User email", examples=["user@example.com"])
+    email_verified: bool | None = Field(None, description="Whether email is verified")
+    display_name: str | None = Field(None, description="User display name", examples=["John Doe"])
+    photo_url: str | None = Field(None, description="User photo URL")
 
 
 # ===== Endpoints =====
 
 
 @router.post(
-    "/register",
-    response_model=Token,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
+    "/verify",
+    response_model=UserResponse,
+    summary="Verify Firebase ID token",
     description=(
-        "Create a new user account and receive a JWT access token.\n\n"
-        "**Validation:**\n"
-        "- Username: 3-50 characters, alphanumeric and underscores only\n"
-        "- Password: 8-128 characters\n"
-        "- Email: Valid email format\n\n"
-        "**Rate limit:** 5 registrations per hour per IP"
+        "Verify a Firebase ID token and get user information.\n\n"
+        "**Primary authentication method** - Use this endpoint to verify tokens from Firebase Client SDK.\n\n"
+        "**Client-side flow:**\n"
+        "1. User signs in with Firebase Auth (Google, Email, etc.)\n"
+        "2. Get ID token: `user.getIdToken()`\n"
+        "3. Send token to this endpoint for verification\n"
+        "4. Use the verified token for subsequent API calls\n\n"
+        "**Response includes:**\n"
+        "- Firebase UID (user_id)\n"
+        "- Email and verification status\n"
+        "- Display name and photo URL"
     ),
 )
-@limiter.limit("5/hour")
-def register(request: Request, user_data: UserRegister) -> Token:
-    """Register a new user."""
-    users_db = get_mock_users_db()
+@limiter.limit("30/minute")
+def verify_token(request: Request, token_data: FirebaseTokenVerify) -> UserResponse:
+    """
+    Verify Firebase ID token and return user information.
 
-    if user_data.username in users_db:
-        logger.warning(f"Duplicate registration attempt for username: {user_data.username}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
+    This is the primary authentication endpoint for Firebase-authenticated users.
+    """
+    try:
+        decoded_token = verify_firebase_token(token_data.id_token)
+
+        logger.info(f"Token verified for Firebase user: {decoded_token.get('uid')}")
+
+        return UserResponse(
+            user_id=decoded_token.get("uid", ""),
+            email=decoded_token.get("email"),
+            email_verified=decoded_token.get("email_verified"),
+            display_name=decoded_token.get("name"),
+            photo_url=decoded_token.get("picture"),
         )
-
-    user_id = f"user_{len(users_db) + 1}"
-    users_db[user_data.username] = {
-        "user_id": user_id,
-        "username": user_data.username,
-        "email": user_data.email,
-        "hashed_password": get_password_hash(user_data.password),
-    }
-
-    logger.info(f"New user registered: {user_data.username} (ID: {user_id})")
-
-    access_token = create_access_token(
-        data={"sub": user_id, "username": user_data.username},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-
-    return Token(
-        access_token=access_token, token_type="bearer", expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-
-
-@router.post(
-    "/login",
-    response_model=Token,
-    summary="Login and get access token",
-    description=(
-        "Login with username and password to receive a JWT access token.\n\n"
-        "**Demo Account for Testing:**\n"
-        "- Username: `demo_user`\n"
-        "- Password: `password123`\n\n"
-        "**Rate limit:** 5 login attempts per minute per IP\n\n"
-        "**Token expires in:** 30 minutes"
-    ),
-)
-@limiter.limit("5/minute")
-def login(request: Request, credentials: UserLogin) -> Token:
-    """Login and get access token."""
-    users_db = get_mock_users_db()
-    user = users_db.get(credentials.username)
-
-    if not user or not verify_password(credentials.password, user["hashed_password"]):
-        logger.warning(f"Failed login attempt for username: {credentials.username}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying token: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    logger.info(f"Successful login for user: {credentials.username}")
-
-    access_token = create_access_token(
-        data={"sub": user["user_id"], "username": user["username"]},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-
-    return Token(
-        access_token=access_token, token_type="bearer", expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
+            detail="Invalid or expired token",
+        ) from e
 
 
 @router.get(
@@ -246,24 +99,51 @@ def login(request: Request, credentials: UserLogin) -> Token:
     summary="Get current user info",
     description=(
         "Get information about the currently authenticated user.\n\n"
-        "**Requires:** Valid JWT token in Authorization header\n\n"
+        "**Requires:** Valid Firebase ID token in Authorization header\n\n"
         "**Example:**\n"
         "```\n"
-        "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\n"
+        "Authorization: Bearer <firebase_id_token>\n"
+        "```\n\n"
+        "The token is verified with Firebase Auth and user info is returned."
+    ),
+)
+async def get_me(user_data: Annotated[dict, Depends(get_current_user)]) -> UserResponse:
+    """
+    Get current authenticated user info from Firebase token.
+    Requires valid Firebase ID token in Authorization header.
+    """
+    return UserResponse(
+        user_id=user_data.get("uid", ""),
+        email=user_data.get("email"),
+        email_verified=user_data.get("email_verified"),
+        display_name=user_data.get("name"),
+        photo_url=user_data.get("picture"),
+    )
+
+
+@router.post(
+    "/refresh",
+    summary="Refresh Firebase ID token",
+    description=(
+        "Endpoint to trigger token refresh on the client side.\n\n"
+        "**Note:** Actual token refresh happens on the client using Firebase SDK.\n"
+        "This endpoint validates the current token and prompts client to refresh.\n\n"
+        "**Client-side:**\n"
+        "```javascript\n"
+        "const user = firebase.auth().currentUser;\n"
+        "const token = await user.getIdToken(true); // force refresh\n"
         "```"
     ),
 )
-def get_current_user(user_id: Annotated[str, Depends(get_current_user_id)]) -> UserResponse:
+@limiter.limit("10/minute")
+async def refresh_token(request: Request, user_id: Annotated[str, Depends(get_current_user_id)]):
     """
-    Get current authenticated user info.
-    Requires valid JWT token in Authorization header.
+    Validate current token and return success.
+    Client should refresh token using Firebase SDK.
     """
-    users_db = get_mock_users_db()
-
-    for user in users_db.values():
-        if user["user_id"] == user_id:
-            return UserResponse(
-                user_id=user["user_id"], username=user["username"], email=user["email"]
-            )
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    logger.info(f"Token refresh requested for user: {user_id}")
+    return {
+        "success": True,
+        "message": "Token is valid. Refresh on client side using Firebase SDK.",
+        "user_id": user_id,
+    }

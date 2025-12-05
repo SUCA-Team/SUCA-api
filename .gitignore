@@ -208,4 +208,9 @@ __marimo__/
 
 *.db
 
+# Firebase credentials
+firebase-service-account.json
+*firebase*.json
+suca-database-sdk.json
+
 prdocs/

@@ -1,83 +1,66 @@
-"""Tests for authentication."""
+"""Tests for authentication with Firebase."""
+
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 
-def test_login_success(client: TestClient):
-    """Test successful login with demo user."""
+@patch("src.suca.api.v1.endpoints.auth.verify_firebase_token")
+def test_verify_token_success(mock_verify: MagicMock, client: TestClient):
+    """Test successful Firebase token verification."""
+    # Mock Firebase token verification
+    mock_verify.return_value = {
+        "uid": "test_user_123",
+        "email": "test@example.com",
+        "email_verified": True,
+        "name": "Test User",
+        "picture": "https://example.com/photo.jpg",
+    }
+
     response = client.post(
-        "/api/v1/auth/login", json={"username": "demo_user", "password": "password123"}
+        "/api/v1/auth/verify",
+        json={"id_token": "mock_firebase_token"},
     )
 
     assert response.status_code == 200
     data = response.json()
 
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
-    assert data["expires_in"] == 1800
+    assert data["user_id"] == "test_user_123"
+    assert data["email"] == "test@example.com"
+    assert data["email_verified"] is True
+    assert data["display_name"] == "Test User"
+    assert data["photo_url"] == "https://example.com/photo.jpg"
 
 
-def test_login_wrong_password(client: TestClient):
-    """Test login with wrong password."""
+@patch("src.suca.api.v1.endpoints.auth.verify_firebase_token")
+def test_verify_token_invalid(mock_verify: MagicMock, client: TestClient):
+    """Test Firebase token verification with invalid token."""
+    from fastapi import HTTPException, status
+
+    # Mock Firebase token verification failure
+    mock_verify.side_effect = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication token",
+    )
+
     response = client.post(
-        "/api/v1/auth/login", json={"username": "demo_user", "password": "wrongpassword"}
+        "/api/v1/auth/verify",
+        json={"id_token": "invalid_token"},
     )
 
     assert response.status_code == 401
-    assert "Incorrect username or password" in response.json()["detail"]
-
-
-def test_login_nonexistent_user(client: TestClient):
-    """Test login with non-existent user."""
-    response = client.post(
-        "/api/v1/auth/login", json={"username": "nonexistent", "password": "password"}
-    )
-
-    assert response.status_code == 401
-
-
-def test_register_new_user(client: TestClient):
-    """Test registering a new user."""
-    response = client.post(
-        "/api/v1/auth/register",
-        json={"username": "testuser", "email": "test@example.com", "password": "testpassword123"},
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
-
-
-def test_register_duplicate_username(client: TestClient):
-    """Test registering with existing username."""
-    # Register first user
-    client.post(
-        "/api/v1/auth/register",
-        json={"username": "testuser2", "email": "test1@example.com", "password": "password123"},
-    )
-
-    # Try to register again with same username
-    response = client.post(
-        "/api/v1/auth/register",
-        json={"username": "testuser2", "email": "test2@example.com", "password": "password123"},
-    )
-
-    assert response.status_code == 400
-    assert "already registered" in response.json()["detail"]
+    assert "Invalid" in response.json()["detail"]
 
 
 def test_get_current_user(client: TestClient, auth_headers: dict):
-    """Test getting current user info."""
+    """Test getting current user info with valid token."""
     response = client.get("/api/v1/auth/me", headers=auth_headers)
 
     assert response.status_code == 200
     data = response.json()
 
-    assert data["user_id"] == "demo_user"
-    assert data["username"] == "demo_user"
-    assert data["email"] == "demo@example.com"
+    # Should return user_id from custom JWT (for backward compatibility)
+    assert "user_id" in data
 
 
 def test_get_current_user_no_token(client: TestClient):
@@ -90,3 +73,21 @@ def test_get_current_user_invalid_token(client: TestClient):
     """Test getting current user with invalid token."""
     response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid_token"})
     assert response.status_code == 401
+
+
+def test_refresh_token(client: TestClient, auth_headers: dict):
+    """Test token refresh endpoint."""
+    response = client.post("/api/v1/auth/refresh", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["success"] is True
+    assert "user_id" in data
+    assert "message" in data
+
+
+def test_refresh_token_no_auth(client: TestClient):
+    """Test refresh endpoint without authentication."""
+    response = client.post("/api/v1/auth/refresh")
+    assert response.status_code == 403

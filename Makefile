@@ -238,6 +238,14 @@ docker-db-shell: ## Connect to PostgreSQL shell
 docker-db-backup: ## Backup database to file
 	docker-compose exec db pg_dump -U suca jmdict > backup_$$(date +%Y%m%d_%H%M%S).sql
 
+docker-db-backup-dict: ## Backup only dictionary data (excluding flashcards)
+	docker-compose exec db pg_dump -U suca -d jmdict \
+		--exclude-table=flashcard_decks \
+		--exclude-table=flashcards \
+		--exclude-table=alembic_version \
+		--data-only \
+		> dict_backup_$$(date +%Y%m%d_%H%M%S).sql
+
 docker-db-restore: ## Restore database from file (usage: make docker-db-restore FILE=backup.sql)
 	docker-compose exec -T db psql -U suca -d jmdict < $(FILE)
 
