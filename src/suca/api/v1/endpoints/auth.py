@@ -23,6 +23,10 @@ limiter = Limiter(key_func=get_remote_address)
 
 # ===== Schemas with Examples =====
 
+# load_dotenv()
+# default_app = firebase_admin.initialize_app(firebase_admin.credentials.RefreshToken(os.getenv("PATH_TO_SDK_JSON")))
+# print(firebase_auth.list_users())
+
 
 class UserRegister(BaseModel):
     """User registration schema."""

@@ -59,6 +59,7 @@ docs/
 prdocs/
 *.md
 !README.md
+LICENSE
 
 # Database files (don't include in image)
 *.db
