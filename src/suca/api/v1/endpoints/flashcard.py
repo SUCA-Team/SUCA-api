@@ -239,9 +239,7 @@ def review_flashcard(
 
 
 @router.get("/due", response_model=DueCardsResponse)
-def get_due_cards(
-    user_id: UserIdDep, flashcard_service: FlashcardServiceDep
-) -> DueCardsResponse:
+def get_due_cards(user_id: UserIdDep, flashcard_service: FlashcardServiceDep) -> DueCardsResponse:
     """
     Get all cards due for review across all decks.
 

@@ -40,13 +40,10 @@ class FlashcardResponse(FlashcardBase):
     created_at: datetime
     updated_at: datetime
 
-    # FSRS fields
+    # FSRS fields (matching FSRS v6.3.0)
     difficulty: float
     stability: float
-    elapsed_days: int
-    scheduled_days: int
-    reps: int
-    lapses: int
+    reps: int  # Maps to FSRS 'step' field
     state: int
     last_review: datetime | None
     due: datetime

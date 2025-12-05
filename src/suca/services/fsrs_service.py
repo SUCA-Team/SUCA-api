@@ -1,102 +1,168 @@
-"""FSRS service for spaced repetition scheduling."""
+"""FSRS service for spaced repetition algorithm."""
 
 from datetime import UTC, datetime
 from enum import IntEnum
 
-from fsrs import FSRS, Card, Rating, ReviewLog
+from fsrs import Card, Rating, ReviewLog, Scheduler, State
 
 
 class CardState(IntEnum):
-    """Card state enum matching FSRS."""
+    """Card states matching FSRS State enum."""
 
-    New = 0
+    New = 0  # Our custom state for new cards (not in FSRS lib)
     Learning = 1
     Review = 2
     Relearning = 3
 
 
 class FSRSService:
-    """Service for FSRS spaced repetition scheduling."""
+    """Service wrapper for FSRS (Free Spaced Repetition Scheduler)."""
 
     def __init__(self):
         """Initialize FSRS scheduler with default parameters."""
-        self.fsrs = FSRS()
+        self.scheduler = Scheduler()
 
     def create_card(self) -> Card:
-        """Create a new FSRS card with default state."""
+        """
+        Create a new FSRS card with default values.
+
+        Returns:
+            A new Card object in the Learning state (FSRS default)
+        """
         return Card()
 
-    def review_card(
-        self, card: Card, rating: Rating, review_time: datetime | None = None
-    ) -> tuple[Card, ReviewLog]:
+    def review_card(self, card: Card, rating: Rating) -> tuple[Card, ReviewLog]:
         """
-        Review a card and get updated state.
+        Review a card and get the updated card state.
 
         Args:
-            card: Current card state
-            rating: User rating (Again=1, Hard=2, Good=3, Easy=4)
-            review_time: Time of review (defaults to now)
+            card: The FSRS Card object to review
+            rating: Rating enum (Again=1, Hard=2, Good=3, Easy=4)
 
         Returns:
             Tuple of (updated_card, review_log)
         """
-        if review_time is None:
-            review_time = datetime.now(UTC)
-
-        scheduling_cards = self.fsrs.repeat(card, review_time)
-
-        # Get the card for the selected rating
-        updated_card = scheduling_cards[rating].card
-        review_log = scheduling_cards[rating].review_log
-
-        return updated_card, review_log
+        now = datetime.now(UTC)
+        return self.scheduler.review_card(card, rating, now)
 
     def get_retrievability(self, card: Card, now: datetime | None = None) -> float:
         """
-        Get current retrievability (probability of recall).
+        Calculate current retrievability (recall probability) for a card.
 
         Args:
-            card: Card to check
+            card: The FSRS Card object
             now: Current time (defaults to now)
 
         Returns:
-            Retrievability as float between 0 and 1
+            Retrievability value between 0 and 1
         """
         if now is None:
             now = datetime.now(UTC)
+        return self.scheduler.get_card_retrievability(card, now)
 
-        return self.fsrs.get_retrievability(card, now)
-
-    def cards_from_flashcard(
-        self,
-        difficulty: float,
-        stability: float,
-        elapsed_days: int,
-        scheduled_days: int,
-        reps: int,
-        lapses: int,
-        state: int,
-        last_review: datetime | None,
-        due: datetime,
-    ) -> Card:
+    def card_to_dict(self, card: Card) -> dict:
         """
-        Convert database flashcard fields to FSRS Card.
+        Convert FSRS Card to dict for database storage.
+
+        Note: FSRS v6.3.0 uses 'step' field which we map to 'reps' column.
 
         Args:
-            Database flashcard FSRS fields
+            card: FSRS Card object
+
+        Returns:
+            Dictionary with card fields
+        """
+        return {
+            "difficulty": card.difficulty if card.difficulty is not None else 0.0,
+            "stability": card.stability if card.stability is not None else 0.0,
+            "reps": card.step if card.step is not None else 0,  # Map step to reps, default to 0
+            "state": card.state.value,
+            "last_review": card.last_review,
+            "due": card.due,
+        }
+
+    def dict_to_card(self, data: dict) -> Card:
+        """
+        Convert dictionary to FSRS Card object.
+
+        Note: FSRS v6.3.0 uses 'step' field which we map from 'reps' column.
+
+        Args:
+            data: Dictionary with card fields
 
         Returns:
             FSRS Card object
         """
         card = Card()
-        card.difficulty = difficulty
-        card.stability = stability
-        card.elapsed_days = elapsed_days
-        card.scheduled_days = scheduled_days
-        card.reps = reps
-        card.lapses = lapses
-        card.state = state
-        card.last_review = last_review
-        card.due = due
+        card.difficulty = data.get("difficulty") if data.get("difficulty") != 0.0 else None
+        card.stability = data.get("stability") if data.get("stability") != 0.0 else None
+        card.step = data.get("reps", 0)  # Map reps to step
+
+        # Convert state integer to State enum
+        # Note: State 0 (New) doesn't exist in FSRS v6.3.0, default to Learning
+        state_value = data.get("state", 1)
+        if state_value == 0:
+            state_value = 1  # Convert New to Learning
+        card.state = State(state_value)
+
+        # Database now stores timezone-aware datetimes
+        card.last_review = data.get("last_review")
+        card.due = data.get("due", datetime.now(UTC))
 
         return card
+
+    def is_card_new(self, card: Card) -> bool:
+        """
+        Check if a card is in the New state.
+
+        Note: In FSRS v6.3.0, there's no explicit "New" state. A card is new if:
+        - It's in Learning state (step 0)
+        - Has no stability/difficulty
+        - Has never been reviewed
+
+        Args:
+            card: FSRS Card object
+
+        Returns:
+            True if card is new (never reviewed)
+        """
+        return (
+            card.state == State.Learning
+            and card.step == 0
+            and card.last_review is None
+            and card.stability is None
+        )
+
+    def is_card_due(self, card: Card, now: datetime | None = None) -> bool:
+        """
+        Check if a card is due for review.
+
+        Args:
+            card: FSRS Card object
+            now: Current time (defaults to now)
+
+        Returns:
+            True if card is due
+        """
+        if now is None:
+            now = datetime.now(UTC)
+        return card.due <= now
+
+    def get_next_states(self, card: Card) -> dict[Rating, Card]:
+        """
+        Get preview of card states for each possible rating.
+
+        Args:
+            card: FSRS Card object
+
+        Returns:
+            Dictionary mapping Rating to the resulting Card state
+        """
+        now = datetime.now(UTC)
+        result = {}
+
+        for rating in [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy]:
+            updated_card, _ = self.scheduler.review_card(card, rating, now)
+            result[rating] = updated_card
+
+        return result

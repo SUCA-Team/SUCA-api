@@ -12,8 +12,8 @@ from ..schemas.flashcard_schemas import (
     DeckListResponse,
     DeckResponse,
     DeckUpdate,
-    DueDeckStats,
     DueCardsResponse,
+    DueDeckStats,
     FlashcardCreate,
     FlashcardListResponse,
     FlashcardResponse,
@@ -161,6 +161,7 @@ class FlashcardService(BaseService[Flashcard]):
         try:
             # Create new FSRS card
             fsrs_card = self.fsrs_service.create_card()
+            card_data = self.fsrs_service.card_to_dict(fsrs_card)
 
             flashcard = Flashcard(
                 deck_id=flashcard_create.deck_id,
@@ -168,15 +169,7 @@ class FlashcardService(BaseService[Flashcard]):
                 front=flashcard_create.front,
                 back=flashcard_create.back,
                 # Initialize FSRS fields
-                difficulty=fsrs_card.difficulty,
-                stability=fsrs_card.stability,
-                elapsed_days=fsrs_card.elapsed_days,
-                scheduled_days=fsrs_card.scheduled_days,
-                reps=fsrs_card.reps,
-                lapses=fsrs_card.lapses,
-                state=fsrs_card.state,
-                last_review=fsrs_card.last_review,
-                due=fsrs_card.due,
+                **card_data,
             )
             self.session.add(flashcard)
             self.session.commit()
@@ -270,32 +263,28 @@ class FlashcardService(BaseService[Flashcard]):
 
         try:
             # Convert flashcard to FSRS card
-            fsrs_card = self.fsrs_service.cards_from_flashcard(
-                difficulty=flashcard.difficulty,
-                stability=flashcard.stability,
-                elapsed_days=flashcard.elapsed_days,
-                scheduled_days=flashcard.scheduled_days,
-                reps=flashcard.reps,
-                lapses=flashcard.lapses,
-                state=flashcard.state,
-                last_review=flashcard.last_review,
-                due=flashcard.due,
-            )
+            card_dict = {
+                "difficulty": flashcard.difficulty,
+                "stability": flashcard.stability,
+                "reps": flashcard.reps,
+                "state": flashcard.state,
+                "last_review": flashcard.last_review,
+                "due": flashcard.due,
+            }
+            fsrs_card = self.fsrs_service.dict_to_card(card_dict)
 
             # Review the card
             rating = Rating(review.rating)
             updated_card, _ = self.fsrs_service.review_card(fsrs_card, rating)
 
             # Update flashcard with new FSRS state
-            flashcard.difficulty = updated_card.difficulty
-            flashcard.stability = updated_card.stability
-            flashcard.elapsed_days = updated_card.elapsed_days
-            flashcard.scheduled_days = updated_card.scheduled_days
-            flashcard.reps = updated_card.reps
-            flashcard.lapses = updated_card.lapses
-            flashcard.state = updated_card.state
-            flashcard.last_review = updated_card.last_review
-            flashcard.due = updated_card.due
+            updated_data = self.fsrs_service.card_to_dict(updated_card)
+            flashcard.difficulty = updated_data["difficulty"]
+            flashcard.stability = updated_data["stability"]
+            flashcard.reps = updated_data["reps"]
+            flashcard.state = updated_data["state"]
+            flashcard.last_review = updated_data["last_review"]
+            flashcard.due = updated_data["due"]
             flashcard.updated_at = datetime.now(UTC)
 
             self.session.add(flashcard)
@@ -306,8 +295,10 @@ class FlashcardService(BaseService[Flashcard]):
             now = datetime.now(UTC)
             retrievability = self.fsrs_service.get_retrievability(updated_card, now)
 
-            response = FlashcardReviewResponse.model_validate(flashcard)
-            response.retrievability = retrievability
+            # Create response with all fields including retrievability
+            response_data = flashcard.model_dump()
+            response_data["retrievability"] = retrievability
+            response = FlashcardReviewResponse.model_validate(response_data)
 
             return response
 
@@ -344,6 +335,7 @@ class FlashcardService(BaseService[Flashcard]):
                 new_cards = sum(1 for c in cards if c.state == CardState.New)
                 learning_cards = sum(1 for c in cards if c.state == CardState.Learning)
                 review_cards = sum(1 for c in cards if c.state == CardState.Review)
+                # Database now stores timezone-aware datetimes
                 due_cards = sum(1 for c in cards if c.due <= now)
 
                 deck_stats.append(
