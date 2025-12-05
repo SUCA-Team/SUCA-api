@@ -225,10 +225,8 @@ make docker-fresh
 
 ```
 .
-├── Dockerfile              # Production image
-├── Dockerfile.dev          # Development image (hot-reload)
+├── Dockerfile              # Development image (hot-reload)
 ├── docker-compose.yml      # Development stack
-├── docker-compose.prod.yml # Production stack
 ├── .dockerignore          # Files to exclude from image
 └── .env.docker            # Environment template
 ```

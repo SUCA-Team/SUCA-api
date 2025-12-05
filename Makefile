@@ -184,14 +184,8 @@ clean-all: clean ## Clean everything including Poetry cache
 docker-build: ## Build production Docker image
 	docker build -t suca-api:latest .
 
-docker-build-dev: ## Build development Docker image
-	docker build -f Dockerfile.dev -t suca-api:dev .
-
 docker-run: ## Run production Docker container
 	docker run -p 8000:8000 --env-file .env suca-api:latest
-
-docker-run-dev: ## Run development Docker container with volume
-	docker run -p 8000:8000 --env-file .env -v $$(pwd)/src:/app/src suca-api:dev
 
 # Docker Compose - Development
 docker-up: ## Start all services (development mode)

@@ -10,8 +10,9 @@ services:
       POSTGRES_USER: ${DB_USER:-suca}
       POSTGRES_PASSWORD: ${DB_PASS:-suca}
       POSTGRES_DB: ${DB_NAME:-jmdict}
+      PGPORT: ${DB_PORT:-5433}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5433}:${DB_PORT:-5433}"
     volumes:
       # Persist database data
       - postgres_data:/var/lib/postgresql/data
@@ -20,7 +21,7 @@ services:
     networks:
       - suca-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-suca}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-suca} -d ${DB_NAME:-jmdict} -p 5433"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,8 +37,8 @@ services:
       - "8000:8000"
     environment:
       # Database connection
-      DB_HOST: db
-      DB_PORT: 5432
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5433}
       DB_USER: ${DB_USER:-suca}
       DB_PASS: ${DB_PASS:-suca}
       DB_NAME: ${DB_NAME:-jmdict}
@@ -47,7 +48,7 @@ services:
       DEBUG: ${DEBUG:-false}
       
       # CORS settings
-      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,https://akichiro.github.io
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     depends_on:
       db:
         condition: service_healthy
