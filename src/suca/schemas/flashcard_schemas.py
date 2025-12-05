@@ -1,3 +1,5 @@
+"""Flashcard schemas for request/response validation."""
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,7 +21,6 @@ class FlashcardCreate(FlashcardBase):
 class FlashcardCreateNested(FlashcardBase):
     """Schema for creating flashcard (nested under deck endpoint)."""
 
-    # No deck_id here - it comes from URL path
     pass
 
 
@@ -39,7 +40,30 @@ class FlashcardResponse(FlashcardBase):
     created_at: datetime
     updated_at: datetime
 
+    # FSRS fields
+    difficulty: float
+    stability: float
+    elapsed_days: int
+    scheduled_days: int
+    reps: int
+    lapses: int
+    state: int
+    last_review: datetime | None
+    due: datetime
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class FlashcardReviewRequest(BaseModel):
+    """Schema for reviewing a flashcard."""
+
+    rating: int = Field(..., ge=1, le=4, description="1=Again, 2=Hard, 3=Good, 4=Easy")
+
+
+class FlashcardReviewResponse(FlashcardResponse):
+    """Schema for flashcard review response with next review info."""
+
+    retrievability: float = Field(..., description="Current recall probability (0-1)")
 
 
 class DeckBase(BaseModel):
@@ -84,3 +108,22 @@ class DeckListResponse(BaseModel):
 
     decks: list[DeckResponse]
     total_count: int
+
+
+class DueDeckStats(BaseModel):
+    """Statistics for due cards in a deck."""
+
+    deck_id: int
+    deck_name: str
+    total_cards: int
+    new_cards: int
+    learning_cards: int
+    review_cards: int
+    due_cards: int
+
+
+class DueCardsResponse(BaseModel):
+    """Response for due cards across all decks."""
+
+    decks: list[DueDeckStats]
+    total_due: int
