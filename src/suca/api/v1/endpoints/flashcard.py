@@ -79,6 +79,7 @@ def get_flashcard_deck(
 
 
 @router.put("/decks/{deck_id}", response_model=DeckResponse)
+@router.patch("/decks/{deck_id}", response_model=DeckResponse)
 def update_flashcard_deck(
     deck_id: int,
     deck_update: DeckUpdate,
@@ -406,3 +407,57 @@ async def import_deck_csv(
         raise HTTPException(status_code=500, detail=str(e))
     except csv.Error as e:
         raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
+
+
+# ===== Public Deck Endpoints (No Auth Required) =====
+
+
+@router.get("/public/decks", response_model=DeckListResponse)
+def list_public_decks(
+    flashcard_service: FlashcardServiceDep, limit: int = 50, offset: int = 0
+) -> DeckListResponse:
+    """Get all public (shared) decks. No authentication required."""
+    try:
+        return flashcard_service.get_public_decks(limit=limit, offset=offset)
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/public/decks/{deck_id}", response_model=DeckResponse)
+def get_public_deck(deck_id: int, flashcard_service: FlashcardServiceDep) -> DeckResponse:
+    """Get a public deck by ID. No authentication required."""
+    try:
+        return flashcard_service.get_public_deck(deck_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/public/decks/{deck_id}/cards", response_model=FlashcardListResponse)
+def get_public_deck_flashcards(
+    deck_id: int, flashcard_service: FlashcardServiceDep
+) -> FlashcardListResponse:
+    """Get all flashcards from a public deck. No authentication required."""
+    try:
+        return flashcard_service.get_public_deck_flashcards(deck_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/copy", response_model=DeckResponse)
+def copy_public_deck(
+    deck_id: int,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+    new_name: str | None = None,
+) -> DeckResponse:
+    """Copy a public deck to user's collection. Requires authentication."""
+    try:
+        return flashcard_service.copy_deck_to_user(deck_id, user_id, new_name)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))

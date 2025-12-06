@@ -68,6 +68,8 @@ class FlashcardDeck(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: str = Field(index=True)
     name: str
+    description: str | None = Field(default=None)
+    is_public: bool = Field(default=False, index=True)  # Whether deck is shared publicly
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

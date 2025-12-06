@@ -1,6 +1,6 @@
 # SUCA API
 
-FastAPI-based Japanese dictionary and flashcard management system with intelligent bilingual search, JWT authentication, FSRS spaced repetition, and optimized PostgreSQL database.
+FastAPI-based Japanese dictionary and flashcard management system with intelligent bilingual search, Firebase authentication, FSRS spaced repetition, and optimized PostgreSQL database.
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.118-009688.svg)](https://fastapi.tiangolo.com)
@@ -23,8 +23,8 @@ FastAPI-based Japanese dictionary and flashcard management system with intellige
 - Multi-deck organization with due card statistics
 
 🔐 **Secure Authentication**
-- JWT-based authentication with refresh tokens
-- bcrypt password hashing
+- Firebase Authentication integration
+- Secure token verification
 - User isolation for personal flashcard data
 
 ⚡ **Production-Ready**
@@ -92,7 +92,7 @@ make run
 - **Framework**: FastAPI 0.118 (async ASGI)
 - **ORM**: SQLModel (SQLAlchemy 2.0 + Pydantic)
 - **Database**: PostgreSQL 16
-- **Authentication**: JWT with bcrypt password hashing
+- **Authentication**: Firebase Authentication
 - **Spaced Repetition**: FSRS (Free Spaced Repetition Scheduler) v6.3.0
 - **Testing**: pytest with async support
 - **Code Quality**: ruff (linting + formatting), mypy (type checking)
@@ -103,13 +103,13 @@ make run
 ```
 src/suca/
 ├── api/v1/endpoints/     # HTTP request handlers
-│   ├── auth.py           # JWT authentication (register, login, me)
+│   ├── auth.py           # Firebase authentication (token verification, user info)
 │   ├── flashcard.py      # CRUD for decks and cards with FSRS
 │   ├── search.py         # Bilingual dictionary search
 │   └── health.py         # Health check endpoint
 ├── core/                 # Configuration and middleware
 │   ├── config.py         # Pydantic settings management
-│   ├── auth.py           # JWT token creation/validation
+│   ├── auth.py           # Firebase token verification
 │   ├── exceptions.py     # Custom exception classes
 │   └── middleware.py     # Exception handlers and CORS
 ├── db/                   # Database layer
@@ -195,8 +195,9 @@ DB_USER=postgres
 DB_PASS=postgres
 DB_NAME=jmdict
 
-# JWT Authentication
-JWT_SECRET_KEY=$(openssl rand -hex 32)  # Generate secure key
+# Firebase Authentication
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json
 
 # Optional
 DEBUG=true                              # Enable debug mode
@@ -413,7 +414,8 @@ DB_NAME=jmdict
 # Application
 ENV=dev
 DEBUG=true
-JWT_SECRET_KEY=<generate-with-openssl-rand-hex-32>
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json
 ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Performance
@@ -530,54 +532,32 @@ make docker-stats
 
 ### Authentication
 
-All flashcard endpoints require JWT authentication. Health and search endpoints are public.
+All flashcard endpoints require Firebase authentication. Health and search endpoints are public.
 
-**Register User:**
+**Verify Firebase Token:**
 ```http
-POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "username": "testuser",
-  "email": "test@example.com",
-  "password": "SecurePass123"
-}
-
-Response: 201 Created
-{
-  "access_token": "eyJhbGci...",
-  "token_type": "bearer",
-  "expires_in": 1800
-}
-```
-
-**Login:**
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "username": "testuser",
-  "password": "SecurePass123"
-}
+POST /api/v1/auth/verify
+Authorization: Bearer <firebase-id-token>
 
 Response: 200 OK
 {
-  "access_token": "eyJhbGci...",
-  "token_type": "bearer",
-  "expires_in": 1800
+  "uid": "firebase-user-id",
+  "email": "test@example.com",
+  "email_verified": true
 }
 ```
 
-**Get Current User:**
+**Get User Info:**
 ```http
 GET /api/v1/auth/me
-Authorization: Bearer <token>
+Authorization: Bearer <firebase-id-token>
 
 Response: 200 OK
 {
-  "username": "testuser",
-  "email": "test@example.com"
+  "uid": "firebase-user-id",
+  "email": "test@example.com",
+  "display_name": "Test User",
+  "email_verified": true
 }
 ```
 
@@ -973,7 +953,7 @@ docker-compose exec db psql -U suca -d jmdict -c "\d kanji"
 ```
 tests/
 ├── conftest.py           # Fixtures (session, client, auth)
-├── test_auth.py          # JWT authentication tests
+├── test_auth.py          # Firebase authentication tests
 ├── test_flashcard.py     # Flashcard CRUD tests
 ├── test_health.py        # Health endpoint tests
 └── test_search.py        # Search functionality tests
