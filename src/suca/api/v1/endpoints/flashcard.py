@@ -328,6 +328,26 @@ def review_flashcard(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/decks/{deck_id}/due", response_model=FlashcardListResponse)
+def get_deck_due_cards(
+    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> FlashcardListResponse:
+    """
+    Get all cards due for review in a specific deck.
+
+    Returns a list of flashcards that are currently due, ordered by due date (earliest first).
+    This is useful for implementing a study session for a specific deck.
+
+    Requires authentication.
+    """
+    try:
+        return flashcard_service.get_deck_due_cards(deck_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/due", response_model=DueCardsResponse)
 def get_due_cards(user_id: UserIdDep, flashcard_service: FlashcardServiceDep) -> DueCardsResponse:
     """
