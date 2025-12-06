@@ -355,8 +355,12 @@ class FlashcardService(BaseService[Flashcard]):
                 new_cards = sum(1 for c in cards if c.state == CardState.New)
                 learning_cards = sum(1 for c in cards if c.state == CardState.Learning)
                 review_cards = sum(1 for c in cards if c.state == CardState.Review)
-                # Database now stores timezone-aware datetimes
-                due_cards = sum(1 for c in cards if c.due <= now)
+                # Ensure timezone-aware comparison for due date
+                due_cards = sum(
+                    1
+                    for c in cards
+                    if (c.due.replace(tzinfo=UTC) if c.due.tzinfo is None else c.due) <= now
+                )
 
                 deck_stats.append(
                     DueDeckStats(
@@ -379,6 +383,46 @@ class FlashcardService(BaseService[Flashcard]):
 
         except Exception as e:
             raise DatabaseException(f"Failed to get due cards: {str(e)}")
+
+    def get_deck_due_cards(self, deck_id: int, user_id: str) -> FlashcardListResponse:
+        """
+        Get all cards due for review in a specific deck.
+
+        Args:
+            deck_id: Deck ID
+            user_id: User ID
+
+        Returns:
+            List of flashcards that are currently due for review
+        """
+        # Verify deck ownership
+        self._get_deck_by_id(deck_id, user_id)
+
+        try:
+            now = datetime.now(UTC)
+
+            # Get all cards in the deck that are due
+            statement = (
+                select(Flashcard)
+                .where(Flashcard.deck_id == deck_id)
+                .order_by(Flashcard.due.asc())  # Order by due date, earliest first
+            )
+
+            all_cards = self.session.exec(statement).all()
+
+            # Filter for cards that are due (with timezone-aware comparison)
+            due_cards = [
+                card
+                for card in all_cards
+                if (card.due.replace(tzinfo=UTC) if card.due.tzinfo is None else card.due) <= now
+            ]
+
+            return FlashcardListResponse(
+                flashcards=[FlashcardResponse.model_validate(fc) for fc in due_cards],
+                total_count=len(due_cards),
+            )
+        except Exception as e:
+            raise DatabaseException(f"Failed to get due cards for deck: {str(e)}")
 
     def _get_deck_by_id(self, deck_id: int, user_id: str) -> FlashcardDeck:
         """Get deck by ID and verify ownership."""

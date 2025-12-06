@@ -412,3 +412,85 @@ def test_due_cards_empty_for_new_user(auth_client: TestClient):
     assert "decks" in data
     assert "total_due" in data
     assert isinstance(data["decks"], list)
+
+
+def test_get_deck_due_cards_endpoint(auth_client: TestClient):
+    """Test the new endpoint that returns due cards for a specific deck."""
+    # Create a deck
+    deck_response = auth_client.post("/api/v1/flashcard/decks", json={"name": "Test Deck"})
+    assert deck_response.status_code == 201
+    deck_id = deck_response.json()["id"]
+
+    # Create several cards
+    card_ids = []
+    for i in range(5):
+        card_response = auth_client.post(
+            f"/api/v1/flashcard/decks/{deck_id}/cards",
+            json={"front": f"Card {i}", "back": f"Answer {i}"},
+        )
+        assert card_response.status_code == 201
+        card_ids.append(card_response.json()["id"])
+
+    # All new cards should be due
+    due_cards_response = auth_client.get(f"/api/v1/flashcard/decks/{deck_id}/due")
+    assert due_cards_response.status_code == 200
+
+    due_cards_data = due_cards_response.json()
+    assert due_cards_data["total_count"] == 5
+    assert len(due_cards_data["flashcards"]) == 5
+
+    # Verify each card has the required fields
+    for card in due_cards_data["flashcards"]:
+        assert "id" in card
+        assert "front" in card
+        assert "back" in card
+        assert "due" in card
+        assert "state" in card
+
+
+def test_get_deck_due_cards_after_review(auth_client: TestClient):
+    """Test get_deck_due_cards shows fewer cards after reviewing with Easy."""
+    # Create a deck
+    deck_response = auth_client.post("/api/v1/flashcard/decks", json={"name": "Review Deck"})
+    deck_id = deck_response.json()["id"]
+
+    # Create 3 cards
+    card_ids = []
+    for i in range(3):
+        card_response = auth_client.post(
+            f"/api/v1/flashcard/decks/{deck_id}/cards",
+            json={"front": f"Card {i}", "back": f"Answer {i}"},
+        )
+        card_ids.append(card_response.json()["id"])
+
+    # Initially all 3 should be due
+    due_response = auth_client.get(f"/api/v1/flashcard/decks/{deck_id}/due")
+    assert due_response.json()["total_count"] == 3
+
+    # Review one card with "Easy" (rating 4) - should be due much later
+    auth_client.post(
+        f"/api/v1/flashcard/decks/{deck_id}/cards/{card_ids[0]}/review", json={"rating": 4}
+    )
+
+    # Now only 2 cards should be due
+    due_response = auth_client.get(f"/api/v1/flashcard/decks/{deck_id}/due")
+    assert due_response.json()["total_count"] == 2
+
+
+def test_get_deck_due_cards_empty_deck(auth_client: TestClient):
+    """Test get_deck_due_cards when deck has no cards."""
+    deck_response = auth_client.post("/api/v1/flashcard/decks", json={"name": "Empty Deck"})
+    deck_id = deck_response.json()["id"]
+
+    due_cards_response = auth_client.get(f"/api/v1/flashcard/decks/{deck_id}/due")
+    assert due_cards_response.status_code == 200
+
+    due_cards_data = due_cards_response.json()
+    assert due_cards_data["total_count"] == 0
+    assert len(due_cards_data["flashcards"]) == 0
+
+
+def test_get_deck_due_cards_nonexistent_deck(auth_client: TestClient):
+    """Test get_deck_due_cards with non-existent deck."""
+    due_cards_response = auth_client.get("/api/v1/flashcard/decks/99999/due")
+    assert due_cards_response.status_code == 404
