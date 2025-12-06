@@ -67,18 +67,21 @@ class DeckBase(BaseModel):
     """Base deck schema."""
 
     name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=500)
 
 
 class DeckCreate(DeckBase):
     """Schema for creating deck."""
 
-    pass
+    is_public: bool | None = Field(default=False)
 
 
 class DeckUpdate(BaseModel):
     """Schema for updating deck."""
 
     name: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=500)
+    is_public: bool | None = None
 
 
 class DeckResponse(DeckBase):
@@ -86,6 +89,7 @@ class DeckResponse(DeckBase):
 
     id: int
     user_id: str
+    is_public: bool = False
     created_at: datetime
     updated_at: datetime
     flashcard_count: int = 0

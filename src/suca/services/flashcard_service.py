@@ -39,6 +39,8 @@ class FlashcardService(BaseService[Flashcard]):
             deck = FlashcardDeck(
                 user_id=user_id,
                 name=deck_create.name,
+                description=deck_create.description,
+                is_public=deck_create.is_public if deck_create.is_public is not None else False,
             )
             self.session.add(deck)
             self.session.commit()
@@ -48,6 +50,8 @@ class FlashcardService(BaseService[Flashcard]):
                 id=deck.id,
                 user_id=deck.user_id,
                 name=deck.name,
+                description=deck.description,
+                is_public=deck.is_public,
                 created_at=deck.created_at,
                 updated_at=deck.updated_at,
                 flashcard_count=0,
@@ -74,6 +78,8 @@ class FlashcardService(BaseService[Flashcard]):
                     id=deck.id,
                     user_id=deck.user_id,
                     name=deck.name,
+                    description=deck.description,
+                    is_public=deck.is_public,
                     created_at=deck.created_at,
                     updated_at=deck.updated_at,
                     flashcard_count=count,
@@ -98,6 +104,8 @@ class FlashcardService(BaseService[Flashcard]):
                 id=deck.id,
                 user_id=deck.user_id,
                 name=deck.name,
+                description=deck.description,
+                is_public=deck.is_public,
                 created_at=deck.created_at,
                 updated_at=deck.updated_at,
                 flashcard_count=count,
@@ -111,6 +119,10 @@ class FlashcardService(BaseService[Flashcard]):
 
         if deck_update.name is not None:
             deck.name = deck_update.name
+        if deck_update.description is not None:
+            deck.description = deck_update.description
+        if deck_update.is_public is not None:
+            deck.is_public = deck_update.is_public
 
         deck.updated_at = datetime.now(UTC)
 
@@ -127,6 +139,8 @@ class FlashcardService(BaseService[Flashcard]):
                 id=deck.id,
                 user_id=deck.user_id,
                 name=deck.name,
+                description=deck.description,
+                is_public=deck.is_public,
                 created_at=deck.created_at,
                 updated_at=deck.updated_at,
                 flashcard_count=count,
@@ -381,3 +395,147 @@ class FlashcardService(BaseService[Flashcard]):
             raise ValidationException(f"Flashcard with id {card_id} not found")
 
         return flashcard
+
+    def get_public_decks(self, limit: int = 50, offset: int = 0) -> DeckListResponse:
+        """Get all public (shared) decks."""
+        try:
+            statement = (
+                select(FlashcardDeck, func.count(Flashcard.id).label("flashcard_count"))
+                .outerjoin(Flashcard, FlashcardDeck.id == Flashcard.deck_id)
+                .where(FlashcardDeck.is_public)
+                .group_by(FlashcardDeck.id)
+                .order_by(FlashcardDeck.updated_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+
+            results = self.session.exec(statement).all()
+
+            decks = [
+                DeckResponse(
+                    id=deck.id,
+                    user_id=deck.user_id,
+                    name=deck.name,
+                    description=deck.description,
+                    is_public=deck.is_public,
+                    created_at=deck.created_at,
+                    updated_at=deck.updated_at,
+                    flashcard_count=count,
+                )
+                for deck, count in results
+            ]
+
+            return DeckListResponse(decks=decks, total_count=len(decks))
+        except Exception as e:
+            raise DatabaseException(f"Failed to get public decks: {str(e)}")
+
+    def get_public_deck(self, deck_id: int) -> DeckResponse:
+        """Get a public deck by ID (no ownership check)."""
+        try:
+            statement = select(FlashcardDeck).where(
+                FlashcardDeck.id == deck_id, FlashcardDeck.is_public
+            )
+            deck = self.session.exec(statement).first()
+
+            if not deck:
+                raise ValidationException(f"Public deck with id {deck_id} not found")
+
+            count = self.session.exec(
+                select(func.count(Flashcard.id)).where(Flashcard.deck_id == deck_id)
+            ).one()
+
+            return DeckResponse(
+                id=deck.id,
+                user_id=deck.user_id,
+                name=deck.name,
+                description=deck.description,
+                is_public=deck.is_public,
+                created_at=deck.created_at,
+                updated_at=deck.updated_at,
+                flashcard_count=count,
+            )
+        except ValidationException:
+            raise
+        except Exception as e:
+            raise DatabaseException(f"Failed to get public deck: {str(e)}")
+
+    def get_public_deck_flashcards(self, deck_id: int) -> FlashcardListResponse:
+        """Get all flashcards from a public deck."""
+        try:
+            # Verify deck is public
+            statement = select(FlashcardDeck).where(
+                FlashcardDeck.id == deck_id, FlashcardDeck.is_public
+            )
+            deck = self.session.exec(statement).first()
+
+            if not deck:
+                raise ValidationException(f"Public deck with id {deck_id} not found")
+
+            # Get flashcards
+            statement = (
+                select(Flashcard)
+                .where(Flashcard.deck_id == deck_id)
+                .order_by(Flashcard.created_at.desc())
+            )
+
+            flashcards = self.session.exec(statement).all()
+
+            return FlashcardListResponse(
+                flashcards=[FlashcardResponse.model_validate(fc) for fc in flashcards],
+                total_count=len(flashcards),
+            )
+        except ValidationException:
+            raise
+        except Exception as e:
+            raise DatabaseException(f"Failed to get public deck flashcards: {str(e)}")
+
+    def copy_deck_to_user(
+        self, source_deck_id: int, user_id: str, new_name: str | None = None
+    ) -> DeckResponse:
+        """Copy a public deck to user's collection."""
+        try:
+            # Get source deck (must be public)
+            source_deck = self.get_public_deck(source_deck_id)
+
+            # Get source flashcards
+            source_flashcards = self.get_public_deck_flashcards(source_deck_id)
+
+            # Create new deck for user
+            deck_name = new_name if new_name else f"{source_deck.name} (Copy)"
+            new_deck = FlashcardDeck(
+                user_id=user_id,
+                name=deck_name,
+                description=source_deck.description,
+                is_public=False,  # Copied decks are private by default
+            )
+            self.session.add(new_deck)
+            self.session.flush()  # Get deck ID without committing
+
+            # Copy flashcards
+            for source_card in source_flashcards.flashcards:
+                new_card = Flashcard(
+                    deck_id=new_deck.id,
+                    user_id=user_id,
+                    front=source_card.front,
+                    back=source_card.back,
+                )
+                self.session.add(new_card)
+
+            self.session.commit()
+            self.session.refresh(new_deck)
+
+            return DeckResponse(
+                id=new_deck.id,
+                user_id=new_deck.user_id,
+                name=new_deck.name,
+                description=new_deck.description,
+                is_public=new_deck.is_public,
+                created_at=new_deck.created_at,
+                updated_at=new_deck.updated_at,
+                flashcard_count=len(source_flashcards.flashcards),
+            )
+        except ValidationException:
+            raise
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to copy deck: {str(e)}")

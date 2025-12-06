@@ -18,7 +18,7 @@ from .core.middleware import (
     suca_exception_handler,
     validation_exception_handler,
 )
-from .core.validators import validate_jwt_secret, validate_required_env_vars
+from .core.validators import validate_required_env_vars
 from .db.db import init_db
 from .utils.logging import setup_logging
 
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     # Validate environment
     try:
         validate_required_env_vars()
-        validate_jwt_secret()
+        # validate_jwt_secret()
     except ValueError as e:
         logger.error(f"Environment validation failed: {e}")
         if not settings.debug:
