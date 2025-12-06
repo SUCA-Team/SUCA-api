@@ -846,17 +846,17 @@ Response: 200 OK
 - `example` - Usage examples (text, sense_id FK)
 
 **Flashcard Tables:**
-- `flashcard_decks` - User decks (user_id, name)
-- `flashcards` - Cards (deck_id FK, user_id, front, back)
+- `flashcard_decks` - Decks (owner_id: Firebase UID, name)
+- `flashcards` - Cards (deck_id FK, owner_id: Firebase UID, entry_id FK)
 
 ### Migrations with Alembic
 
 **Create migration from model changes:**
 ```bash
 # Auto-generate migration
-make migrate MSG="add user table"
+make migrate MSG="add flashcard fields"
 # or
-poetry run alembic revision --autogenerate -m "add user table"
+poetry run alembic revision --autogenerate -m "add flashcard fields"
 
 # Review generated file in alembic/versions/
 # Edit if needed, then apply:
