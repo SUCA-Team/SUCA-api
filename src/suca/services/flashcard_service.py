@@ -8,6 +8,12 @@ from sqlmodel import func, select
 from ..core.exceptions import DatabaseException, ValidationException
 from ..db.model import Flashcard, FlashcardDeck
 from ..schemas.flashcard_schemas import (
+    BulkCreateRequest,
+    BulkDeleteRequest,
+    BulkMoveRequest,
+    BulkOperationResponse,
+    BulkResetRequest,
+    BulkUpdateRequest,
     DeckCreate,
     DeckListResponse,
     DeckResponse,
@@ -539,3 +545,264 @@ class FlashcardService(BaseService[Flashcard]):
         except Exception as e:
             self.session.rollback()
             raise DatabaseException(f"Failed to copy deck: {str(e)}")
+
+    # ===== Bulk Operations =====
+
+    def bulk_delete_flashcards(
+        self, deck_id: int, user_id: str, request: BulkDeleteRequest
+    ) -> BulkOperationResponse:
+        """Delete multiple flashcards at once."""
+        try:
+            # Verify deck ownership
+            self._get_deck_by_id(deck_id, user_id)
+
+            processed = 0
+            failed = 0
+            errors = []
+
+            for card_id in request.card_ids:
+                try:
+                    flashcard = self._get_flashcard_by_id(card_id, user_id)
+
+                    if flashcard.deck_id != deck_id:
+                        errors.append(f"Card {card_id} not in deck {deck_id}")
+                        failed += 1
+                        continue
+
+                    self.session.delete(flashcard)
+                    processed += 1
+                except ValidationException as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+                except Exception as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+
+            self.session.commit()
+
+            return BulkOperationResponse(
+                success=failed == 0,
+                processed_count=processed,
+                failed_count=failed,
+                message=f"Deleted {processed} flashcards"
+                + (f", {failed} failed" if failed > 0 else ""),
+                errors=errors,
+            )
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to bulk delete flashcards: {str(e)}")
+
+    def bulk_create_flashcards(
+        self, deck_id: int, user_id: str, request: BulkCreateRequest
+    ) -> BulkOperationResponse:
+        """Create multiple flashcards at once."""
+        try:
+            # Verify deck ownership
+            self._get_deck_by_id(deck_id, user_id)
+
+            processed = 0
+            failed = 0
+            errors = []
+
+            for card_data in request.cards:
+                try:
+                    # Create new FSRS card
+                    fsrs_card = self.fsrs_service.create_card()
+                    fsrs_data = self.fsrs_service.card_to_dict(fsrs_card)
+
+                    flashcard = Flashcard(
+                        deck_id=deck_id,
+                        user_id=user_id,
+                        front=card_data.front,
+                        back=card_data.back,
+                        **fsrs_data,
+                    )
+                    self.session.add(flashcard)
+                    processed += 1
+                except Exception as e:
+                    errors.append(f"Failed to create card '{card_data.front[:20]}...': {str(e)}")
+                    failed += 1
+
+            self.session.commit()
+
+            # Update deck timestamp
+            deck = self.session.get(FlashcardDeck, deck_id)
+            if deck:
+                deck.updated_at = datetime.now(UTC)
+                self.session.add(deck)
+                self.session.commit()
+
+            return BulkOperationResponse(
+                success=failed == 0,
+                processed_count=processed,
+                failed_count=failed,
+                message=f"Created {processed} flashcards"
+                + (f", {failed} failed" if failed > 0 else ""),
+                errors=errors,
+            )
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to bulk create flashcards: {str(e)}")
+
+    def bulk_update_flashcards(
+        self, deck_id: int, user_id: str, request: BulkUpdateRequest
+    ) -> BulkOperationResponse:
+        """Update multiple flashcards at once."""
+        try:
+            # Verify deck ownership
+            self._get_deck_by_id(deck_id, user_id)
+
+            processed = 0
+            failed = 0
+            errors = []
+
+            for update_item in request.updates:
+                try:
+                    flashcard = self._get_flashcard_by_id(update_item.id, user_id)
+
+                    if flashcard.deck_id != deck_id:
+                        errors.append(f"Card {update_item.id} not in deck {deck_id}")
+                        failed += 1
+                        continue
+
+                    if update_item.front is not None:
+                        flashcard.front = update_item.front
+                    if update_item.back is not None:
+                        flashcard.back = update_item.back
+
+                    flashcard.updated_at = datetime.now(UTC)
+                    self.session.add(flashcard)
+                    processed += 1
+                except ValidationException as e:
+                    errors.append(f"Card {update_item.id}: {str(e)}")
+                    failed += 1
+                except Exception as e:
+                    errors.append(f"Card {update_item.id}: {str(e)}")
+                    failed += 1
+
+            self.session.commit()
+
+            return BulkOperationResponse(
+                success=failed == 0,
+                processed_count=processed,
+                failed_count=failed,
+                message=f"Updated {processed} flashcards"
+                + (f", {failed} failed" if failed > 0 else ""),
+                errors=errors,
+            )
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to bulk update flashcards: {str(e)}")
+
+    def bulk_move_flashcards(
+        self, source_deck_id: int, user_id: str, request: BulkMoveRequest
+    ) -> BulkOperationResponse:
+        """Move multiple flashcards to another deck."""
+        try:
+            # Verify both decks ownership
+            self._get_deck_by_id(source_deck_id, user_id)
+            target_deck = self._get_deck_by_id(request.target_deck_id, user_id)
+
+            processed = 0
+            failed = 0
+            errors = []
+
+            for card_id in request.card_ids:
+                try:
+                    flashcard = self._get_flashcard_by_id(card_id, user_id)
+
+                    if flashcard.deck_id != source_deck_id:
+                        errors.append(f"Card {card_id} not in source deck {source_deck_id}")
+                        failed += 1
+                        continue
+
+                    flashcard.deck_id = request.target_deck_id
+                    flashcard.updated_at = datetime.now(UTC)
+                    self.session.add(flashcard)
+                    processed += 1
+                except ValidationException as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+                except Exception as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+
+            self.session.commit()
+
+            # Update both decks timestamp
+            source_deck = self.session.get(FlashcardDeck, source_deck_id)
+            if source_deck:
+                source_deck.updated_at = datetime.now(UTC)
+                self.session.add(source_deck)
+
+            target_deck.updated_at = datetime.now(UTC)
+            self.session.add(target_deck)
+            self.session.commit()
+
+            return BulkOperationResponse(
+                success=failed == 0,
+                processed_count=processed,
+                failed_count=failed,
+                message=f"Moved {processed} flashcards to deck {request.target_deck_id}"
+                + (f", {failed} failed" if failed > 0 else ""),
+                errors=errors,
+            )
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to bulk move flashcards: {str(e)}")
+
+    def bulk_reset_flashcards(
+        self, deck_id: int, user_id: str, request: BulkResetRequest
+    ) -> BulkOperationResponse:
+        """Reset FSRS state for multiple flashcards."""
+        try:
+            # Verify deck ownership
+            self._get_deck_by_id(deck_id, user_id)
+
+            processed = 0
+            failed = 0
+            errors = []
+
+            for card_id in request.card_ids:
+                try:
+                    flashcard = self._get_flashcard_by_id(card_id, user_id)
+
+                    if flashcard.deck_id != deck_id:
+                        errors.append(f"Card {card_id} not in deck {deck_id}")
+                        failed += 1
+                        continue
+
+                    # Reset to new FSRS card state
+                    fsrs_card = self.fsrs_service.create_card()
+                    fsrs_data = self.fsrs_service.card_to_dict(fsrs_card)
+
+                    flashcard.difficulty = fsrs_data["difficulty"]
+                    flashcard.stability = fsrs_data["stability"]
+                    flashcard.reps = fsrs_data["reps"]
+                    flashcard.state = fsrs_data["state"]
+                    flashcard.last_review = fsrs_data["last_review"]
+                    flashcard.due = fsrs_data["due"]
+                    flashcard.updated_at = datetime.now(UTC)
+
+                    self.session.add(flashcard)
+                    processed += 1
+                except ValidationException as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+                except Exception as e:
+                    errors.append(f"Card {card_id}: {str(e)}")
+                    failed += 1
+
+            self.session.commit()
+
+            return BulkOperationResponse(
+                success=failed == 0,
+                processed_count=processed,
+                failed_count=failed,
+                message=f"Reset {processed} flashcards"
+                + (f", {failed} failed" if failed > 0 else ""),
+                errors=errors,
+            )
+        except Exception as e:
+            self.session.rollback()
+            raise DatabaseException(f"Failed to bulk reset flashcards: {str(e)}")

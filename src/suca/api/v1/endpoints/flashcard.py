@@ -12,6 +12,12 @@ from ....api.deps import get_session
 from ....core.auth import get_current_user_id
 from ....core.exceptions import DatabaseException, ValidationException
 from ....schemas.flashcard_schemas import (
+    BulkCreateRequest,
+    BulkDeleteRequest,
+    BulkMoveRequest,
+    BulkOperationResponse,
+    BulkResetRequest,
+    BulkUpdateRequest,
     DeckCreate,
     DeckListResponse,
     DeckResponse,
@@ -199,6 +205,86 @@ def delete_flashcard(
             )
 
         flashcard_service.delete_flashcard(card_id, user_id)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards/bulk-delete")
+def bulk_delete_flashcards(
+    deck_id: int,
+    request: BulkDeleteRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> BulkOperationResponse:
+    """Delete multiple flashcards at once. Requires authentication."""
+    try:
+        return flashcard_service.bulk_delete_flashcards(deck_id, user_id, request)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards/bulk-create", status_code=201)
+def bulk_create_flashcards(
+    deck_id: int,
+    request: BulkCreateRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> BulkOperationResponse:
+    """Create multiple flashcards at once (max 100). Requires authentication."""
+    try:
+        return flashcard_service.bulk_create_flashcards(deck_id, user_id, request)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards/bulk-update")
+def bulk_update_flashcards(
+    deck_id: int,
+    request: BulkUpdateRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> BulkOperationResponse:
+    """Update multiple flashcards at once (max 100). Requires authentication."""
+    try:
+        return flashcard_service.bulk_update_flashcards(deck_id, user_id, request)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards/bulk-move")
+def bulk_move_flashcards(
+    deck_id: int,
+    request: BulkMoveRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> BulkOperationResponse:
+    """Move multiple flashcards to another deck. Requires authentication."""
+    try:
+        return flashcard_service.bulk_move_flashcards(deck_id, user_id, request)
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/cards/bulk-reset")
+def bulk_reset_flashcards(
+    deck_id: int,
+    request: BulkResetRequest,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+) -> BulkOperationResponse:
+    """Reset FSRS state for multiple flashcards (back to new). Requires authentication."""
+    try:
+        return flashcard_service.bulk_reset_flashcards(deck_id, user_id, request)
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except DatabaseException as e:

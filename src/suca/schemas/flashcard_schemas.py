@@ -128,3 +128,59 @@ class DueCardsResponse(BaseModel):
 
     decks: list[DueDeckStats]
     total_due: int
+
+
+# ===== Bulk Operations Schemas =====
+
+
+class BulkDeleteRequest(BaseModel):
+    """Schema for bulk delete request."""
+
+    card_ids: list[int] = Field(..., min_length=1, description="List of card IDs to delete")
+
+
+class BulkCreateRequest(BaseModel):
+    """Schema for bulk create flashcards."""
+
+    cards: list[FlashcardCreateNested] = Field(
+        ..., min_length=1, max_length=100, description="List of flashcards to create (max 100)"
+    )
+
+
+class BulkUpdateItem(BaseModel):
+    """Single item for bulk update."""
+
+    id: int
+    front: str | None = Field(None, min_length=1, max_length=1000)
+    back: str | None = Field(None, min_length=1, max_length=1000)
+
+
+class BulkUpdateRequest(BaseModel):
+    """Schema for bulk update flashcards."""
+
+    updates: list[BulkUpdateItem] = Field(
+        ..., min_length=1, max_length=100, description="List of flashcard updates (max 100)"
+    )
+
+
+class BulkMoveRequest(BaseModel):
+    """Schema for moving cards between decks."""
+
+    card_ids: list[int] = Field(..., min_length=1, description="List of card IDs to move")
+    target_deck_id: int = Field(..., description="Target deck ID")
+
+
+class BulkResetRequest(BaseModel):
+    """Schema for resetting FSRS state of cards."""
+
+    card_ids: list[int] = Field(..., min_length=1, description="List of card IDs to reset")
+
+
+class BulkOperationResponse(BaseModel):
+    """Response for bulk operations."""
+
+    success: bool
+    processed_count: int
+    failed_count: int = 0
+    message: str
+    errors: list[str] = Field(default_factory=list)
