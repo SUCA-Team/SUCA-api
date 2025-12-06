@@ -1,8 +1,11 @@
 """Flashcard endpoints."""
 
+import csv
+import io
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from ....api.deps import get_session
@@ -254,3 +257,152 @@ def get_due_cards(user_id: UserIdDep, flashcard_service: FlashcardServiceDep) ->
         return flashcard_service.get_due_cards(user_id)
     except DatabaseException as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== CSV Import/Export Endpoints =====
+
+
+@router.get("/decks/{deck_id}/export/csv")
+def export_deck_csv(
+    deck_id: int, user_id: UserIdDep, flashcard_service: FlashcardServiceDep
+) -> StreamingResponse:
+    """
+    Export a flashcard deck to CSV format.
+
+    Returns a CSV file with columns: front, back
+    The file can be downloaded and used for backup or importing into other systems.
+
+    Requires authentication.
+    """
+    try:
+        # Verify deck ownership
+        deck = flashcard_service.get_deck(deck_id, user_id)
+
+        # Get all flashcards in the deck
+        flashcards_response = flashcard_service.get_deck_flashcards(deck_id, user_id)
+
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow(["front", "back"])
+
+        # Write flashcard data
+        for flashcard in flashcards_response.flashcards:
+            writer.writerow([flashcard.front, flashcard.back])
+
+        # Prepare response
+        output.seek(0)
+
+        # Create filename from deck name (sanitize for filesystem)
+        safe_filename = "".join(
+            c if c.isalnum() or c in (" ", "-", "_") else "_" for c in deck.name
+        )
+        filename = f"{safe_filename}.csv"
+
+        return StreamingResponse(
+            io.BytesIO(
+                output.getvalue().encode("utf-8-sig")
+            ),  # UTF-8 with BOM for Excel compatibility
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/decks/{deck_id}/import/csv")
+async def import_deck_csv(
+    deck_id: int,
+    user_id: UserIdDep,
+    flashcard_service: FlashcardServiceDep,
+    file: UploadFile = File(...),
+):
+    """
+    Import flashcards from CSV file into a deck.
+
+    Expected CSV format:
+    - Header row: front, back
+    - Each subsequent row: front_text, back_text
+
+    Notes:
+    - Duplicates are not checked - all rows will be imported as new cards
+    - Empty rows are skipped
+    - Maximum file size: 10MB
+
+    Requires authentication.
+    """
+    try:
+        # Verify deck ownership
+        flashcard_service.get_deck(deck_id, user_id)
+
+        # Check file type
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+
+        if not file.filename.endswith(".csv"):
+            raise HTTPException(status_code=400, detail="File must be a CSV file")
+
+        # Read file content
+        content = await file.read()
+
+        # Check file size (10MB limit)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(content) > max_size:
+            raise HTTPException(status_code=400, detail="File size exceeds 10MB limit")
+
+        # Parse CSV
+        try:
+            decoded_content = content.decode("utf-8-sig")  # Handle UTF-8 BOM
+        except UnicodeDecodeError:
+            try:
+                decoded_content = content.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+
+        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+
+        # Validate header
+        if (
+            not csv_reader.fieldnames
+            or "front" not in csv_reader.fieldnames
+            or "back" not in csv_reader.fieldnames
+        ):
+            raise HTTPException(
+                status_code=400, detail="CSV must have 'front' and 'back' columns in header"
+            )
+
+        # Import flashcards
+        imported_count = 0
+        skipped_count = 0
+
+        for row in csv_reader:
+            front = row.get("front", "").strip()
+            back = row.get("back", "").strip()
+
+            # Skip empty rows
+            if not front or not back:
+                skipped_count += 1
+                continue
+
+            # Create flashcard
+            flashcard_create = FlashcardCreate(deck_id=deck_id, front=front, back=back)
+            flashcard_service.create_flashcard(user_id, flashcard_create)
+            imported_count += 1
+
+        return {
+            "success": True,
+            "imported_count": imported_count,
+            "skipped_count": skipped_count,
+            "message": f"Successfully imported {imported_count} flashcards",
+        }
+
+    except ValidationException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DatabaseException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except csv.Error as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
