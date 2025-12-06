@@ -403,17 +403,29 @@ def export_deck_csv(
         output.seek(0)
 
         # Create filename from deck name (sanitize for filesystem)
-        safe_filename = "".join(
-            c if c.isalnum() or c in (" ", "-", "_") else "_" for c in deck.name
+        # ASCII fallback: replace non-ASCII with underscores
+        safe_filename_ascii = "".join(
+            c if c.isascii() and (c.isalnum() or c in (" ", "-", "_")) else "_" for c in deck.name
         )
-        filename = f"{safe_filename}.csv"
+
+        # RFC 5987 encoded filename for UTF-8 support (handles Japanese, emoji, etc.)
+        from urllib.parse import quote
+
+        encoded_filename = quote(deck.name.encode("utf-8"))
+
+        # Provide both ASCII fallback and UTF-8 encoded version
+        filename_header = (
+            f"attachment; "
+            f"filename={safe_filename_ascii}.csv; "
+            f"filename*=UTF-8''{encoded_filename}.csv"
+        )
 
         return StreamingResponse(
             io.BytesIO(
                 output.getvalue().encode("utf-8-sig")
             ),  # UTF-8 with BOM for Excel compatibility
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={"Content-Disposition": filename_header},
         )
     except ValidationException as e:
         raise HTTPException(status_code=404, detail=str(e))
