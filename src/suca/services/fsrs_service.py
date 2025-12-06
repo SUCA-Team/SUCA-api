@@ -70,15 +70,25 @@ class FSRSService:
             card: FSRS Card object
 
         Returns:
-            Dictionary with card fields
+            Dictionary with card fields (all datetimes are timezone-aware)
         """
+        # Ensure last_review is timezone-aware if not None
+        last_review = card.last_review
+        if last_review is not None and last_review.tzinfo is None:
+            last_review = last_review.replace(tzinfo=UTC)
+
+        # Ensure due is timezone-aware
+        due = card.due
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=UTC)
+
         return {
             "difficulty": card.difficulty if card.difficulty is not None else 0.0,
             "stability": card.stability if card.stability is not None else 0.0,
             "reps": card.step if card.step is not None else 0,  # Map step to reps, default to 0
             "state": card.state.value,
-            "last_review": card.last_review,
-            "due": card.due,
+            "last_review": last_review,
+            "due": due,
         }
 
     def dict_to_card(self, data: dict) -> Card:
@@ -105,9 +115,18 @@ class FSRSService:
             state_value = 1  # Convert New to Learning
         card.state = State(state_value)
 
-        # Database now stores timezone-aware datetimes
-        card.last_review = data.get("last_review")
-        card.due = data.get("due", datetime.now(UTC))
+        # Ensure timezone-aware datetimes
+        last_review = data.get("last_review")
+        if last_review is not None and last_review.tzinfo is None:
+            # Convert naive datetime to UTC-aware
+            last_review = last_review.replace(tzinfo=UTC)
+        card.last_review = last_review
+
+        due = data.get("due", datetime.now(UTC))
+        if due.tzinfo is None:
+            # Convert naive datetime to UTC-aware
+            due = due.replace(tzinfo=UTC)
+        card.due = due
 
         return card
 
