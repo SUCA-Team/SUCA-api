@@ -1342,14 +1342,37 @@ def create_flashcard(self, deck_id: int, data: FlashcardCreate) -> Flashcard:
 
 ---
 
+## Attribution
+
+### JMdict Dictionary Data
+
+This application uses the **JMdict/EDICT** Japanese-English dictionary files.
+
+**Copyright:** © Electronic Dictionary Research and Development Group (EDRDG)  
+**License:** Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)  
+**Project Homepage:** http://www.edrdg.org/  
+**Data Source:** http://www.edrdg.org/jmdict/j_jmdict.html
+
+The JMdict dictionary data is used in conformance with the EDRDG license terms. The `dump.sql` file and database tables (`entry`, `kanji`, `reading`, `sense`, `gloss`, `example`) contain data derived from JMdict.
+
+**Citation:**
+> EDRDG, "JMdict/EDICT Japanese-English Dictionary File",  
+> Electronic Dictionary Research and Development Group,  
+> http://www.edrdg.org/jmdict/j_jmdict.html
+
+For the full JMdict license, see: http://www.edrdg.org/edrdg/licence.html
+
+---
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
+**Note:** The SUCA API source code is licensed under MIT, but the JMdict dictionary data is licensed under CC BY-SA 4.0 and is subject to the EDRDG license terms.
+
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/SUCA-Team/SUCA-api/issues)
-- **Documentation**: http://localhost:8000/docs
 - **Repository**: https://github.com/SUCA-Team/SUCA-api
 
 ---

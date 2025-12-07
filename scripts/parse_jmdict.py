@@ -1,6 +1,14 @@
 """
 Parse JMdict XML and import into PostgreSQL using SQLModel.
 Only English glosses are imported.
+
+JMdict Dictionary Data Attribution:
+    Copyright © Electronic Dictionary Research and Development Group (EDRDG)
+    License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+    Source: http://www.edrdg.org/jmdict/j_jmdict.html
+    
+    This script processes JMdict data in accordance with the EDRDG license terms.
+    For the full license, see: http://www.edrdg.org/edrdg/licence.html
 """
 
 import json
